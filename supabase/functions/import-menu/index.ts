@@ -14,12 +14,10 @@ serve(async (req) => {
   }
 
   try {
-    // Get the secure webhook URL from Supabase secrets
-    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL')
+    // Get the webhook URL - first try from environment, then use the configured one
+    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL') || 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
     
-    if (!WEBHOOK_URL) {
-      throw new Error('Webhook URL not configured')
-    }
+    console.log('Using webhook URL:', WEBHOOK_URL)
 
     // Verify request headers for security
     const hotelId = req.headers.get('x-hotel-id')
@@ -50,28 +48,51 @@ serve(async (req) => {
       )
     }
 
-    // Forward the request to the secure webhook with additional security headers
+    // Get the form data from the request
+    const formData = await req.formData()
+    
+    // Create a new FormData for the webhook
+    const webhookData = new FormData()
+    
+    // Copy all form fields to the webhook data
+    for (const [key, value] of formData.entries()) {
+      webhookData.append(key, value)
+    }
+    
+    // Add security metadata
+    webhookData.append('hotelId', hotelId)
+    webhookData.append('timestamp', timestamp)
+    webhookData.append('source', 'lovable-app')
+
+    console.log('Sending data to webhook:', WEBHOOK_URL)
+
+    // Forward the request to the webhook
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      body: req.body,
+      body: webhookData,
       headers: {
-        'Content-Type': req.headers.get('content-type') || 'multipart/form-data',
         'X-Hotel-ID': hotelId,
         'X-Timestamp': timestamp,
         'X-Source': 'lovable-app'
       }
     })
 
+    console.log('Webhook response status:', response.status)
+
     if (!response.ok) {
-      throw new Error(`Webhook responded with status: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Webhook error response:', errorText)
+      throw new Error(`Webhook responded with status: ${response.status} - ${errorText}`)
     }
 
     const result = await response.text()
+    console.log('Webhook success response:', result)
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Menu import request processed successfully' 
+        message: 'Menu import request processed successfully',
+        webhookResponse: result
       }),
       { 
         status: 200, 
