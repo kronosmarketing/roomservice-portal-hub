@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit2, Trash2, Package, DollarSign, Clock } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Upload } from "lucide-react";
 
 interface MenuItem {
   id: string;
@@ -31,7 +30,11 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -225,6 +228,65 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     });
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleImportMenu = async () => {
+    if (!selectedFile || !webhookUrl) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona un archivo y proporciona la URL del webhook",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('hotelId', hotelId);
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Menú importado",
+          description: "El archivo ha sido enviado exitosamente"
+        });
+        setShowImportDialog(false);
+        setSelectedFile(null);
+        setWebhookUrl("");
+        // Recargar el menú después de la importación
+        await loadMenuItems();
+      } else {
+        throw new Error('Error en la respuesta del webhook');
+      }
+    } catch (error) {
+      console.error('Error importing menu:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo importar el menú",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCloseImportDialog = () => {
+    setShowImportDialog(false);
+    setSelectedFile(null);
+    setWebhookUrl("");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -240,10 +302,16 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Gestión de Menú</h2>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Agregar Item
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={() => setShowImportDialog(true)} variant="outline">
+            <Upload className="h-4 w-4 mr-2" />
+            Importar Menú
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Agregar Item
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -282,7 +350,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
               
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-green-600" />
-                <span className="font-bold text-green-600">{item.price.toFixed(2)}€</span>
+                <span className="font-bold text-green-600">€{item.price.toFixed(2)}</span>
               </div>
 
               {item.preparation_time && (
@@ -318,6 +386,55 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
           </Button>
         </div>
       )}
+
+      {/* Diálogo para importar menú */}
+      <Dialog open={showImportDialog} onOpenChange={handleCloseImportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Importar Menú</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="webhook">URL del Webhook *</Label>
+              <Input
+                id="webhook"
+                placeholder="https://hooks.zapier.com/hooks/catch/..."
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="file">Archivo del Menú *</Label>
+              <Input
+                id="file"
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
+                onChange={handleFileSelect}
+              />
+              {selectedFile && (
+                <p className="text-sm text-gray-600">
+                  Archivo seleccionado: {selectedFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button variant="outline" onClick={handleCloseImportDialog} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleImportMenu} 
+                className="flex-1"
+                disabled={isUploading || !selectedFile || !webhookUrl}
+              >
+                {isUploading ? "Enviando..." : "Importar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo para agregar/editar item */}
       <Dialog open={showAddDialog} onOpenChange={handleCloseDialog}>

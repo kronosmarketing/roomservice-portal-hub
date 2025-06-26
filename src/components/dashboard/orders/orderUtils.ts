@@ -1,4 +1,3 @@
-
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Order, OrderItem } from "./types";
@@ -70,10 +69,7 @@ export const formatArchivedOrderFromDatabase = (order: any): Order => {
 
 // Utility functions for formatting and display
 export const formatPrice = (price: number) => {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR'
-  }).format(price);
+  return `€${price.toFixed(2)}`;
 };
 
 export const formatTime = (timestamp: string) => {
