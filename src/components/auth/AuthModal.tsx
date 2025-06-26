@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Mic } from "lucide-react";
 import EmailAuthForm from "./EmailAuthForm";
 import OAuthButtons from "./OAuthButtons";
@@ -90,6 +90,12 @@ const AuthModal = ({ isOpen, onClose, mode, onModeChange }: AuthModalProps) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700 border-purple-600 text-white">
+        <DialogHeader>
+          <DialogTitle className="sr-only">
+            {mode === 'login' ? 'Iniciar Sesión' : 'Registrar Hotel'}
+          </DialogTitle>
+        </DialogHeader>
+        
         <div className="flex flex-col items-center space-y-6 p-6">
           {/* Logo */}
           <div className="flex items-center justify-center mb-4">
