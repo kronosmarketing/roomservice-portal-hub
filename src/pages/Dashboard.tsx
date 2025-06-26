@@ -26,9 +26,9 @@ const Dashboard = () => {
 
       setUser(user);
       
-      // Obtener perfil del usuario
+      // Obtener perfil del usuario desde hotel_user_settings
       const { data: profile } = await supabase
-        .from('profiles')
+        .from('hotel_user_settings')
         .select('*')
         .eq('id', user.id)
         .single();
