@@ -1,10 +1,12 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -86,6 +88,31 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       setCategories(data || []);
     } catch (error) {
       console.error('Error loading categories:', error);
+    }
+  };
+
+  const handleAvailabilityToggle = async (itemId: string, currentAvailability: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('menu_items')
+        .update({ available: !currentAvailability })
+        .eq('id', itemId)
+        .eq('hotel_id', hotelId);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Éxito",
+        description: `Elemento ${!currentAvailability ? 'activado' : 'desactivado'} correctamente`
+      });
+      await loadMenuItems();
+    } catch (error) {
+      console.error('Error updating availability:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la disponibilidad",
+        variant: "destructive"
+      });
     }
   };
 
@@ -202,10 +229,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     setIsUploading(true);
     
     try {
-      // Create secure payload with validation
       const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
       
-      // Use our secure edge function instead of direct webhook call
       const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
         headers: {
@@ -224,7 +249,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       });
       setShowImportDialog(false);
       setSelectedFile(null);
-      // Reload menu after processing
       setTimeout(() => loadMenuItems(), 2000);
       
     } catch (error: any) {
@@ -279,37 +303,55 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {menuItems.map((item) => (
-          <Card key={item.id}>
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-lg">{item.name}</CardTitle>
-                <Badge variant={item.available ? "default" : "secondary"}>
-                  {item.available ? "Disponible" : "No disponible"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-lg font-bold text-green-600">€{item.price}</span>
-                {item.preparation_time && (
-                  <span className="text-sm text-gray-500">{item.preparation_time} min</span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Descripción</TableHead>
+                <TableHead>Precio</TableHead>
+                <TableHead>Tiempo (min)</TableHead>
+                <TableHead>Disponible</TableHead>
+                <TableHead>Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {menuItems.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{item.name}</TableCell>
+                  <TableCell className="max-w-xs truncate">{item.description}</TableCell>
+                  <TableCell className="text-green-600 font-bold">€{item.price}</TableCell>
+                  <TableCell>{item.preparation_time || '-'}</TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={item.available}
+                      onCheckedChange={() => handleAvailabilityToggle(item.id, item.available)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {menuItems.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    No hay elementos en el menú
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
