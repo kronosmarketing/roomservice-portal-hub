@@ -6,8 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, MapPin, Package, Hash, CheckCircle } from "lucide-react";
+import { Clock, MapPin, Package, Hash, CheckCircle, Copy, Printer, X, Trash, FileText, DoorClosed } from "lucide-react";
 import { Order, DayStats } from "./types";
+import OrderReportsDialog from "./OrderReportsDialog";
+import DayClosure from "./DayClosure";
+import DeleteOrderDialog from "./DeleteOrderDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface OrdersTabsProps {
   orders: Order[];
@@ -18,6 +22,9 @@ interface OrdersTabsProps {
 
 const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: OrdersTabsProps) => {
   const [updating, setUpdating] = useState<string | null>(null);
+  const [showReports, setShowReports] = useState(false);
+  const [showClosure, setShowClosure] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
 
   const getStatusColor = (status: string) => {
@@ -32,6 +39,56 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         return "bg-red-100 text-red-800 border-red-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const copyOrderId = async (orderId: string) => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      toast({
+        title: "ID copiado",
+        description: "El ID del pedido ha sido copiado al portapapeles",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el ID",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const printOrder = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Pedido #${order.id.substring(0, 8)}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              h1 { color: #333; }
+              .order-info { margin: 10px 0; }
+              .items { background: #f5f5f5; padding: 10px; margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Pedido #${order.id.substring(0, 8)}</h1>
+            <div class="order-info"><strong>Habitación:</strong> ${order.roomNumber}</div>
+            <div class="order-info"><strong>Fecha:</strong> ${order.timestamp}</div>
+            <div class="order-info"><strong>Estado:</strong> ${order.status}</div>
+            <div class="order-info"><strong>Método de pago:</strong> ${order.paymentMethod}</div>
+            <div class="items">
+              <strong>Items:</strong><br>
+              ${order.items}
+            </div>
+            ${order.specialInstructions ? `<div class="order-info"><strong>Instrucciones:</strong> ${order.specialInstructions}</div>` : ''}
+            <div class="order-info"><strong>Total:</strong> €${order.total.toFixed(2)}</div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
     }
   };
 
@@ -116,12 +173,26 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1">
-                <Hash className="h-4 w-4 text-gray-500" />
-                <span className="font-mono text-sm font-medium">
-                  #{order.id.substring(0, 8)}
-                </span>
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div 
+                      className="flex items-center gap-1 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors group"
+                      onClick={() => copyOrderId(order.id)}
+                    >
+                      <Hash className="h-4 w-4 text-gray-500" />
+                      <span className="font-mono text-sm font-medium">
+                        #{order.id.substring(0, 8)}
+                      </span>
+                      <Copy className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Hacer clic para copiar ID completo</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
               <div className="flex items-center gap-1">
                 <MapPin className="h-4 w-4 text-gray-500" />
                 <span className="font-medium">Hab. {order.roomNumber}</span>
@@ -158,17 +229,38 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
               </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => printOrder(order)}
+                className="flex items-center gap-1"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir
+              </Button>
+              
               {(order.status === 'pendiente' || order.status === 'preparando') && (
-                <Button
-                  size="sm"
-                  onClick={() => updateOrderStatus(order.id, 'completado')}
-                  disabled={updating === order.id}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle className="h-4 w-4 mr-1" />
-                  Completar
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => updateOrderStatus(order.id, 'completado')}
+                    disabled={updating === order.id}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Completar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => updateOrderStatus(order.id, 'cancelado')}
+                    disabled={updating === order.id}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancelar
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -179,56 +271,133 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
   const preparingOrders = filterOrdersByStatus(['pendiente', 'preparando']);
   const completedOrders = filterOrdersByStatus(['completado']);
+  const cancelledOrders = filterOrdersByStatus(['cancelado']);
 
   return (
-    <Tabs defaultValue="preparing" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="preparing">
-          Preparando ({preparingOrders.length})
-        </TabsTrigger>
-        <TabsTrigger value="completed">
-          Completados ({completedOrders.length})
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-4">
+      {/* Botones de Informe y Cierre */}
+      <div className="flex gap-4 justify-end">
+        <Button
+          onClick={() => setShowDeleteDialog(true)}
+          variant="outline"
+          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          <Trash className="h-4 w-4 mr-2" />
+          Eliminar Pedido
+        </Button>
+        <Button
+          onClick={() => setShowReports(true)}
+          variant="outline"
+          className="bg-blue-50 hover:bg-blue-100"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          Informe
+        </Button>
+        <Button
+          onClick={() => setShowClosure(true)}
+          className="bg-purple-600 hover:bg-purple-700"
+        >
+          <DoorClosed className="h-4 w-4 mr-2" />
+          Cierre
+        </Button>
+      </div>
 
-      <TabsContent value="preparing">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos en Preparación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {preparingOrders.length > 0 ? (
-              preparingOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No hay pedidos en preparación
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
+      <Tabs defaultValue="preparing" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="preparing">
+            Preparando ({preparingOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="completed">
+            Completados ({completedOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="cancelled">
+            Cancelados ({cancelledOrders.length})
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="completed">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos Completados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {completedOrders.length > 0 ? (
-              completedOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No hay pedidos completados
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="preparing">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pedidos en Preparación</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {preparingOrders.length > 0 ? (
+                preparingOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} />
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No hay pedidos en preparación
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pedidos Completados</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {completedOrders.length > 0 ? (
+                completedOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} />
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No hay pedidos completados
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cancelled">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pedidos Cancelados</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cancelledOrders.length > 0 ? (
+                cancelledOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} />
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No hay pedidos cancelados
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Diálogos */}
+      <OrderReportsDialog 
+        isOpen={showReports}
+        onClose={() => setShowReports(false)}
+        hotelId={hotelId}
+      />
+      
+      <DayClosure
+        isOpen={showClosure}
+        onClose={() => setShowClosure(false)}
+        hotelId={hotelId}
+        onOrdersChange={onOrdersChange}
+        onDayStatsChange={onDayStatsChange}
+      />
+
+      <DeleteOrderDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        hotelId={hotelId}
+        onOrderDeleted={(deletedOrderId) => {
+          const updatedOrders = orders.filter(order => order.id !== deletedOrderId);
+          onOrdersChange(updatedOrders);
+        }}
+      />
+    </div>
   );
 };
 
