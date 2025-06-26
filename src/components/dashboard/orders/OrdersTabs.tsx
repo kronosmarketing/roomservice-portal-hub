@@ -1,16 +1,16 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
 import { validateUserHotelAccess, sanitizeInput, validateOrderId } from "./securityUtils";
 import OrderReportsDialog from "./OrderReportsDialog";
 import DeleteOrderDialog from "./DeleteOrderDialog";
+import DayClosure from "./DayClosure";
 import { useToast } from "@/hooks/use-toast";
 
 interface OrdersTabsProps {
@@ -149,6 +149,7 @@ const OrderCard = ({
 const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: OrdersTabsProps) => {
   const [showReports, setShowReports] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDayClosure, setShowDayClosure] = useState(false);
   const { toast } = useToast();
 
   const pendingOrders = orders.filter(order => order.status === 'pendiente');
@@ -434,6 +435,166 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     }
   };
 
+  const handlePrintDailyReport = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Obtener pedidos del día
+      const { data: todayOrders, error } = await supabase
+        .from('orders')
+        .select('status, payment_method, total')
+        .eq('hotel_id', hotelId)
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      if (error) {
+        throw error;
+      }
+
+      if (todayOrders) {
+        const completedOrders = todayOrders.filter(o => o.status === 'completado');
+        const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
+        
+        const habitacionOrders = completedOrders.filter(o => o.payment_method === 'habitacion');
+        const efectivoOrders = completedOrders.filter(o => o.payment_method === 'efectivo');
+        const tarjetaOrders = completedOrders.filter(o => o.payment_method === 'tarjeta');
+
+        const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+
+        // Imprimir informe X (sin cerrar)
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          const currentTime = new Date().toLocaleString('es-ES');
+          
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>Informe X - ${today.toLocaleDateString('es-ES')}</title>
+                <style>
+                  @media print {
+                    @page { 
+                      size: 80mm auto; 
+                      margin: 0; 
+                    }
+                  }
+                  body { 
+                    font-family: 'Courier New', monospace; 
+                    font-size: 12px;
+                    margin: 0;
+                    padding: 10px;
+                    width: 80mm;
+                    line-height: 1.2;
+                  }
+                  .center { text-align: center; }
+                  .bold { font-weight: bold; }
+                  .separator { 
+                    border-top: 1px dashed #000; 
+                    margin: 10px 0; 
+                  }
+                  .double-separator { 
+                    border-top: 2px solid #000; 
+                    margin: 10px 0; 
+                  }
+                  .row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 2px 0;
+                  }
+                  .total-section {
+                    margin-top: 15px;
+                    padding-top: 10px;
+                    border-top: 2px solid #000;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="center bold">
+                  === INFORME X ===
+                </div>
+                <div class="center">
+                  ${today.toLocaleDateString('es-ES')} - ${currentTime}
+                </div>
+                <div class="center">
+                  INFORME PARCIAL DEL DIA
+                </div>
+                
+                <div class="separator"></div>
+                
+                <div class="bold">RESUMEN DE PEDIDOS:</div>
+                <div class="row">
+                  <span>Total pedidos:</span>
+                  <span class="bold">${todayOrders.length}</span>
+                </div>
+                <div class="row">
+                  <span>Completados:</span>
+                  <span class="bold">${completedOrders.length}</span>
+                </div>
+                <div class="row">
+                  <span>Cancelados:</span>
+                  <span>${cancelledOrders.length}</span>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <div class="bold">METODOS DE PAGO:</div>
+                <div class="row">
+                  <span>Habitacion:</span>
+                  <span>${habitacionOrders.length}</span>
+                </div>
+                <div class="row">
+                  <span>Efectivo:</span>
+                  <span>${efectivoOrders.length}</span>
+                </div>
+                <div class="row">
+                  <span>Tarjeta:</span>
+                  <span>${tarjetaOrders.length}</span>
+                </div>
+                
+                <div class="total-section">
+                  <div class="row bold">
+                    <span>TOTAL PARCIAL:</span>
+                    <span>€${totalMoney.toFixed(2)}</span>
+                  </div>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <div class="center">
+                  INFORME PARCIAL - NO CIERRE
+                </div>
+                <div class="center">
+                  Generado: ${currentTime}
+                </div>
+              </body>
+            </html>
+          `);
+          printWindow.document.close();
+          
+          setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+          }, 250);
+        }
+      }
+
+      toast({
+        title: "Informe X generado",
+        description: "Informe parcial del día impreso correctamente",
+      });
+
+    } catch (error) {
+      console.error('Error generando informe X:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo generar el informe X",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleOrderDeleted = async (deletedOrderId: string) => {
     try {
       console.log('🔄 Actualizando lista tras eliminar:', deletedOrderId);
@@ -497,6 +658,22 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         >
           <FileText className="h-4 w-4" />
           Ver Informes
+        </Button>
+        <Button 
+          onClick={handlePrintDailyReport}
+          variant="outline"
+          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-300"
+        >
+          <span className="font-bold text-blue-600">X</span>
+          Informe X
+        </Button>
+        <Button 
+          onClick={() => setShowDayClosure(true)}
+          variant="outline"
+          className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-300"
+        >
+          <span className="font-bold text-purple-600">Z</span>
+          Cierre Z
         </Button>
         <Button 
           onClick={() => setShowDeleteDialog(true)}
@@ -605,6 +782,14 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         onClose={() => setShowDeleteDialog(false)}
         hotelId={hotelId}
         onOrderDeleted={handleOrderDeleted}
+      />
+
+      <DayClosure
+        isOpen={showDayClosure}
+        onClose={() => setShowDayClosure(false)}
+        hotelId={hotelId}
+        onOrdersChange={onOrdersChange}
+        onDayStatsChange={onDayStatsChange}
       />
     </div>
   );
