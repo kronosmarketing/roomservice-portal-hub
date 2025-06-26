@@ -1,14 +1,28 @@
+
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Order, OrderItem } from "./types";
 
-export const formatOrderFromDatabase = (order: any, orderItems: OrderItem[]): Order => {
-  const itemsText = orderItems
-    .map(item => {
-      const itemName = item.menu_item?.name || 'Item desconocido';
-      return `${item.quantity}x ${itemName}`;
-    })
-    .join(', ');
+export const formatOrderFromDatabase = (order: any, orderItems: any[]): Order => {
+  console.log('🔍 Formateando pedido:', order.id.substring(0, 8), 'con items:', orderItems.length);
+  
+  let itemsText = '';
+  
+  if (orderItems && orderItems.length > 0) {
+    itemsText = orderItems
+      .map(item => {
+        // Acceder al menu_item desde la relación
+        const menuItem = item.menu_item;
+        const itemName = menuItem?.name || 'Item desconocido';
+        const quantity = item.quantity || 1;
+        console.log(`  - ${quantity}x ${itemName}`);
+        return `${quantity}x ${itemName}`;
+      })
+      .join(', ');
+  } else {
+    console.log('  - Sin items encontrados');
+    itemsText = 'Sin items';
+  }
 
   return {
     id: order.id,

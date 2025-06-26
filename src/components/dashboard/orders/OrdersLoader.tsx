@@ -70,6 +70,12 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         );
         
         console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
+        
+        // Log para verificar los items de cada pedido
+        ordersWithItems.forEach(order => {
+          console.log(`Pedido ${order.id.substring(0, 8)}: ${order.items}`);
+        });
+        
         onOrdersLoaded(ordersWithItems);
       }
 
