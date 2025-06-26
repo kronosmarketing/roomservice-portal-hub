@@ -452,6 +452,14 @@ export type Database = {
         Args: { order_hotel_id: string }
         Returns: boolean
       }
+      check_rate_limit_with_audit: {
+        Args: {
+          action_name: string
+          max_requests?: number
+          window_minutes?: number
+        }
+        Returns: boolean
+      }
       delete_order_with_items: {
         Args: { order_id_param: string; hotel_id_param: string }
         Returns: undefined
@@ -556,6 +564,10 @@ export type Database = {
       }
       user_has_hotel_access: {
         Args: { target_hotel_id: string }
+        Returns: boolean
+      }
+      validate_session_integrity: {
+        Args: Record<PropertyKey, never>
         Returns: boolean
       }
       vector_avg: {

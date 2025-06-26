@@ -249,3 +249,81 @@ export const checkRateLimit = (identifier: string, maxRequests: number = 100, wi
   current.count++;
   return true;
 };
+
+/**
+ * Valida y sanitiza datos de entrada con validación específica por tipo
+ */
+export const validateAndSanitizeInput = (
+  input: string, 
+  type: 'text' | 'email' | 'phone' | 'roomNumber' | 'orderId' | 'amount',
+  maxLength: number = 255
+): { isValid: boolean; sanitizedValue: string; error?: string } => {
+  
+  if (!input || typeof input !== 'string') {
+    return { isValid: false, sanitizedValue: '', error: 'Entrada requerida' };
+  }
+
+  const sanitized = sanitizeInput(input).substring(0, maxLength);
+  
+  switch (type) {
+    case 'email':
+      if (!validateEmail(sanitized)) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de email inválido' };
+      }
+      break;
+    case 'phone':
+      if (!validatePhone(sanitized)) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de teléfono inválido' };
+      }
+      break;
+    case 'roomNumber':
+      if (!validateRoomNumber(sanitized)) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Número de habitación inválido' };
+      }
+      break;
+    case 'orderId':
+      if (!validateOrderId(sanitized)) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de ID de pedido inválido' };
+      }
+      break;
+    case 'amount':
+      const numValue = parseFloat(sanitized);
+      if (!validateAmount(numValue)) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Monto inválido' };
+      }
+      break;
+    case 'text':
+    default:
+      if (sanitized.length === 0) {
+        return { isValid: false, sanitizedValue: sanitized, error: 'Texto requerido' };
+      }
+      break;
+  }
+
+  return { isValid: true, sanitizedValue: sanitized };
+};
+
+/**
+ * Función de auditoría de sesión que verifica integridad periódicamente
+ */
+export const auditSession = async (): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.rpc('validate_session_integrity');
+    
+    if (error) {
+      await logSecurityEvent('session_audit_error', 'security', null, { error: error.message });
+      return false;
+    }
+    
+    const isValid = data === true;
+    
+    if (!isValid) {
+      await logSecurityEvent('invalid_session_detected', 'security', null);
+    }
+    
+    return isValid;
+  } catch (error) {
+    await logSecurityEvent('session_audit_exception', 'security', null, { error: String(error) });
+    return false;
+  }
+};
