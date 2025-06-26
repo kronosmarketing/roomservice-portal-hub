@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -91,101 +90,110 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       const today = new Date().toLocaleDateString('es-ES');
+      const currentTime = new Date().toLocaleTimeString('es-ES');
       
       printWindow.document.write(`
         <html>
           <head>
-            <title>Informe Diario - ${today}</title>
+            <title>Ticket - Informe Diario</title>
             <style>
+              @media print {
+                @page { 
+                  size: 80mm auto; 
+                  margin: 0; 
+                }
+              }
               body { 
-                font-family: Arial, sans-serif; 
-                padding: 20px; 
-                line-height: 1.6;
+                font-family: 'Courier New', monospace; 
+                font-size: 12px;
+                margin: 0;
+                padding: 10px;
+                width: 80mm;
+                line-height: 1.2;
               }
-              h1 { 
-                color: #333; 
-                text-align: center;
-                border-bottom: 2px solid #333;
-                padding-bottom: 10px;
+              .center { text-align: center; }
+              .bold { font-weight: bold; }
+              .separator { 
+                border-top: 1px dashed #000; 
+                margin: 10px 0; 
               }
-              .section {
-                margin: 20px 0;
-                padding: 15px;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-              }
-              .section h2 {
-                color: #666;
-                margin-top: 0;
-              }
-              .stat-row {
+              .row {
                 display: flex;
                 justify-content: space-between;
-                margin: 10px 0;
-                padding: 5px 0;
-                border-bottom: 1px dotted #ccc;
+                margin: 2px 0;
               }
-              .total {
-                font-weight: bold;
-                font-size: 1.2em;
-                color: #2563eb;
+              .total-section {
+                margin-top: 15px;
+                padding-top: 10px;
+                border-top: 2px solid #000;
               }
-              .timestamp {
+              .footer {
+                margin-top: 20px;
                 text-align: center;
-                color: #666;
-                font-size: 0.9em;
-                margin-top: 30px;
+                font-size: 10px;
               }
             </style>
           </head>
           <body>
-            <h1>Informe Diario del Servicio</h1>
-            <p style="text-align: center; color: #666;">${today}</p>
+            <div class="center bold">
+              === INFORME DIARIO ===
+            </div>
+            <div class="center">
+              ${today} - ${currentTime}
+            </div>
             
-            <div class="section">
-              <h2>Estado de Pedidos</h2>
-              <div class="stat-row">
-                <span>Pedidos Completados:</span>
-                <span class="total">${stats.completados}</span>
-              </div>
-              <div class="stat-row">
-                <span>Pedidos Cancelados:</span>
-                <span>${stats.cancelados}</span>
+            <div class="separator"></div>
+            
+            <div class="bold">RESUMEN DE PEDIDOS:</div>
+            <div class="row">
+              <span>Completados:</span>
+              <span class="bold">${stats.completados}</span>
+            </div>
+            <div class="row">
+              <span>Cancelados:</span>
+              <span>${stats.cancelados}</span>
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div class="bold">METODOS DE PAGO:</div>
+            <div class="row">
+              <span>Habitacion:</span>
+              <span>${stats.habitacion}</span>
+            </div>
+            <div class="row">
+              <span>Efectivo:</span>
+              <span>${stats.efectivo}</span>
+            </div>
+            <div class="row">
+              <span>Tarjeta:</span>
+              <span>${stats.tarjeta}</span>
+            </div>
+            
+            <div class="total-section">
+              <div class="row bold">
+                <span>TOTAL DEL DIA:</span>
+                <span>${stats.totalDinero.toFixed(2)}€</span>
               </div>
             </div>
-
-            <div class="section">
-              <h2>Métodos de Pago (Solo Completados)</h2>
-              <div class="stat-row">
-                <span>Habitación:</span>
-                <span>${stats.habitacion} pedidos</span>
-              </div>
-              <div class="stat-row">
-                <span>Efectivo:</span>
-                <span>${stats.efectivo} pedidos</span>
-              </div>
-              <div class="stat-row">
-                <span>Tarjeta:</span>
-                <span>${stats.tarjeta} pedidos</span>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2>Resumen Financiero</h2>
-              <div class="stat-row total">
-                <span>Total Dinero del Día:</span>
-                <span>€${stats.totalDinero.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div class="timestamp">
-              Informe generado el ${new Date().toLocaleString('es-ES')}
+            
+            <div class="separator"></div>
+            
+            <div class="footer">
+              Gracias por usar nuestro sistema
+              <br>
+              Generado: ${new Date().toLocaleString('es-ES')}
             </div>
           </body>
         </html>
       `);
       printWindow.document.close();
-      printWindow.print();
+      
+      // Esperar a que se cargue el contenido antes de imprimir
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
     }
   };
 

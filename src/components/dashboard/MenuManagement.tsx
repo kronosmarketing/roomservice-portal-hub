@@ -282,7 +282,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
               
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-green-600" />
-                <span className="font-bold text-green-600">€{item.price.toFixed(2)}</span>
+                <span className="font-bold text-green-600">{item.price.toFixed(2)}€</span>
               </div>
 
               {item.preparation_time && (
