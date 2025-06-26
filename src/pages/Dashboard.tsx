@@ -29,11 +29,11 @@ const Dashboard = () => {
       console.log("User found:", user.email);
       setUser(user);
       
-      // Obtener perfil del usuario desde hotel_user_settings
+      // Buscar perfil por email en lugar de por ID
       const { data: profile, error } = await supabase
         .from('hotel_user_settings')
         .select('*')
-        .eq('id', user.id)
+        .eq('email', user.email)
         .single();
       
       if (error) {
@@ -42,19 +42,29 @@ const Dashboard = () => {
         const { data: newProfile, error: insertError } = await supabase
           .from('hotel_user_settings')
           .insert({
-            id: user.id,
             email: user.email,
             hotel_name: 'Mi Hotel',
-            agent_name: 'Agente',
+            agent_name: 'Agente IA',
             user_role: 'hotel_manager',
-            is_active: true
+            is_active: true,
+            auth_provider: 'email'
           })
           .select()
           .single();
         
         if (insertError) {
           console.error("Error creating profile:", insertError);
+          // Crear un perfil temporal para que funcione
+          setUserProfile({
+            id: user.id,
+            email: user.email,
+            hotel_name: 'Mi Hotel',
+            agent_name: 'Agente IA',
+            user_role: 'hotel_manager',
+            is_active: true
+          });
         } else {
+          console.log("New profile created:", newProfile);
           setUserProfile(newProfile);
         }
       } else {
@@ -92,6 +102,15 @@ const Dashboard = () => {
     );
   }
 
+  // Asegurar que siempre tenemos datos mínimos para el dashboard
+  const dashboardUser = {
+    userRole: userProfile?.user_role || 'hotel_manager',
+    hotelId: userProfile?.id || user?.id,
+    hotelName: userProfile?.hotel_name || 'Mi Hotel',
+    agentName: userProfile?.agent_name || 'Agente IA',
+    email: userProfile?.email || user?.email
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700">
       {/* Header */}
@@ -106,7 +125,7 @@ const Dashboard = () => {
           
           <div className="flex items-center space-x-4">
             <span className="text-white/80">
-              {userProfile?.hotel_name || user?.email}
+              {dashboardUser.hotelName}
             </span>
             <Button
               onClick={handleLogout}
@@ -122,12 +141,7 @@ const Dashboard = () => {
       </header>
 
       {/* Contenido del dashboard */}
-      <DashboardContent 
-        user={{
-          userRole: userProfile?.user_role || 'hotel_manager',
-          hotelId: userProfile?.id || user?.id
-        }} 
-      />
+      <DashboardContent user={dashboardUser} />
     </div>
   );
 };

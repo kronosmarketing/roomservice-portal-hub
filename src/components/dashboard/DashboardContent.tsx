@@ -9,6 +9,9 @@ interface DashboardContentProps {
   user: {
     userRole?: string;
     hotelId?: string;
+    hotelName?: string;
+    agentName?: string;
+    email?: string;
   };
 }
 
@@ -76,8 +79,10 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
             <div className="bg-white/10 rounded-lg p-6">
               <h3 className="text-xl font-bold text-white mb-4">Información del Hotel</h3>
               <div className="space-y-2 text-white/80">
-                <p><strong>Hotel ID:</strong> {user.hotelId}</p>
-                <p><strong>Rol:</strong> {user.userRole || 'No definido'}</p>
+                <p><strong>Hotel:</strong> {user.hotelName || 'Mi Hotel'}</p>
+                <p><strong>Agente:</strong> {user.agentName || 'Agente IA'}</p>
+                <p><strong>Email:</strong> {user.email}</p>
+                <p><strong>Rol:</strong> {user.userRole || 'hotel_manager'}</p>
                 <p><strong>Estado:</strong> <span className="text-green-400">Activo</span></p>
               </div>
             </div>
@@ -87,7 +92,7 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
         <TabsContent value="orders" className="bg-white/10 rounded-lg p-6">
           <div className="text-white">
             <h2 className="text-2xl font-bold mb-4">Gestión de Pedidos</h2>
-            <p className="text-white/70 mb-4">Panel de pedidos para el hotel ID: {user.hotelId}</p>
+            <p className="text-white/70 mb-4">Panel de pedidos para el hotel: {user.hotelName}</p>
             
             <div className="bg-white/5 rounded-lg p-4 border border-white/10">
               <p className="text-white/60">
@@ -101,7 +106,7 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
         <TabsContent value="menu" className="bg-white/10 rounded-lg p-6">
           <div className="text-white">
             <h2 className="text-2xl font-bold mb-4">Gestión de Menú</h2>
-            <p className="text-white/70 mb-4">Panel de gestión de menú para el hotel ID: {user.hotelId}</p>
+            <p className="text-white/70 mb-4">Panel de gestión de menú para el hotel: {user.hotelName}</p>
             
             <div className="bg-white/5 rounded-lg p-4 border border-white/10">
               <p className="text-white/60">
