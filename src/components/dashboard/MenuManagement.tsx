@@ -1,25 +1,25 @@
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Upload } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Plus, Edit, Trash2, Upload } from "lucide-react";
+import { createSecureWebhookPayload, sanitizeInput } from "@/utils/inputValidation";
 
 interface MenuItem {
   id: string;
   name: string;
-  description: string | null;
+  description: string;
   price: number;
+  category_id: string;
   available: boolean;
-  preparation_time: number | null;
-  ingredients: string | null;
-  category_id: string | null;
+  preparation_time: number;
+  ingredients: string;
 }
 
 interface MenuManagementProps {
@@ -28,8 +28,9 @@ interface MenuManagementProps {
 
 const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -38,44 +39,41 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     name: "",
     description: "",
     price: "",
-    available: true,
+    category_id: "",
     preparation_time: "",
     ingredients: ""
   });
   const { toast } = useToast();
 
-  // URL del webhook predefinida
-  const WEBHOOK_URL = "https://n8n-n8n.url.url.host/webhook/";
+  // Secure webhook configuration
+  const WEBHOOK_CONFIG = {
+    url: "https://n8n-n8n.url.url.host/webhook/",
+    timeout: 30000, // 30 seconds
+    maxRetries: 3
+  };
 
   useEffect(() => {
     if (hotelId) {
       loadMenuItems();
+      loadCategories();
     }
   }, [hotelId]);
 
   const loadMenuItems = async () => {
     try {
-      setLoading(true);
-      console.log('🍽️ Cargando menú para hotel:', hotelId);
-
-      const { data: items, error } = await supabase
+      const { data, error } = await supabase
         .from('menu_items')
         .select('*')
         .eq('hotel_id', hotelId)
         .order('name');
 
-      if (error) {
-        throw error;
-      }
-
-      console.log('📋 Items del menú cargados:', items?.length || 0);
-      setMenuItems(items || []);
-
+      if (error) throw error;
+      setMenuItems(data || []);
     } catch (error) {
-      console.error('Error cargando menú:', error);
+      console.error('Error loading menu items:', error);
       toast({
         title: "Error",
-        description: "No se pudieron cargar los items del menú",
+        description: "No se pudieron cargar los elementos del menú",
         variant: "destructive"
       });
     } finally {
@@ -83,29 +81,37 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     }
   };
 
-  const handleSaveItem = async () => {
-    if (!formData.name.trim() || !formData.price) {
-      toast({
-        title: "Error",
-        description: "Nombre y precio son requeridos",
-        variant: "destructive"
-      });
-      return;
-    }
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('menu_categories')
+        .select('*')
+        .eq('hotel_id', hotelId)
+        .order('name');
 
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     try {
       const itemData = {
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
+        name: sanitizeInput(formData.name),
+        description: sanitizeInput(formData.description),
         price: parseFloat(formData.price),
-        available: formData.available,
-        preparation_time: formData.preparation_time ? parseInt(formData.preparation_time) : null,
-        ingredients: formData.ingredients.trim() || null,
-        hotel_id: hotelId
+        category_id: formData.category_id || null,
+        preparation_time: parseInt(formData.preparation_time) || 0,
+        ingredients: sanitizeInput(formData.ingredients),
+        hotel_id: hotelId,
+        available: true
       };
 
       if (editingItem) {
-        // Actualizar item existente
         const { error } = await supabase
           .from('menu_items')
           .update(itemData)
@@ -113,127 +119,80 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
           .eq('hotel_id', hotelId);
 
         if (error) throw error;
-
         toast({
-          title: "Item actualizado",
-          description: "El item del menú ha sido actualizado exitosamente"
+          title: "Éxito",
+          description: "Elemento actualizado correctamente"
         });
       } else {
-        // Crear nuevo item
         const { error } = await supabase
           .from('menu_items')
           .insert([itemData]);
 
         if (error) throw error;
-
         toast({
-          title: "Item agregado",
-          description: "El nuevo item ha sido agregado al menú"
+          title: "Éxito",
+          description: "Elemento creado correctamente"
         });
       }
 
-      // Recargar items y cerrar diálogo
+      setShowDialog(false);
+      setEditingItem(null);
+      setFormData({
+        name: "",
+        description: "",
+        price: "",
+        category_id: "",
+        preparation_time: "",
+        ingredients: ""
+      });
       await loadMenuItems();
-      handleCloseDialog();
-
     } catch (error) {
-      console.error('Error guardando item:', error);
+      console.error('Error saving menu item:', error);
       toast({
         title: "Error",
-        description: "No se pudo guardar el item del menú",
+        description: "No se pudo guardar el elemento",
         variant: "destructive"
       });
     }
   };
 
-  const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este item del menú?')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('menu_items')
-        .delete()
-        .eq('id', itemId)
-        .eq('hotel_id', hotelId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Item eliminado",
-        description: "El item ha sido eliminado del menú"
-      });
-
-      await loadMenuItems();
-
-    } catch (error) {
-      console.error('Error eliminando item:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar el item del menú",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleToggleAvailability = async (itemId: string, available: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('menu_items')
-        .update({ available: !available })
-        .eq('id', itemId)
-        .eq('hotel_id', hotelId);
-
-      if (error) throw error;
-
-      await loadMenuItems();
-      
-      toast({
-        title: "Disponibilidad actualizada",
-        description: `El item ha sido ${!available ? 'activado' : 'desactivado'}`
-      });
-
-    } catch (error) {
-      console.error('Error actualizando disponibilidad:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar la disponibilidad",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEditItem = (item: MenuItem) => {
+  const handleEdit = (item: MenuItem) => {
     setEditingItem(item);
     setFormData({
       name: item.name,
       description: item.description || "",
       price: item.price.toString(),
-      available: item.available,
+      category_id: item.category_id || "",
       preparation_time: item.preparation_time?.toString() || "",
       ingredients: item.ingredients || ""
     });
-    setShowAddDialog(true);
+    setShowDialog(true);
   };
 
-  const handleCloseDialog = () => {
-    setShowAddDialog(false);
-    setEditingItem(null);
-    setFormData({
-      name: "",
-      description: "",
-      price: "",
-      available: true,
-      preparation_time: "",
-      ingredients: ""
-    });
-  };
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este elemento?')) return;
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    try {
+      const { error } = await supabase
+        .from('menu_items')
+        .delete()
+        .eq('id', id)
+        .eq('hotel_id', hotelId);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Éxito",
+        description: "Elemento eliminado correctamente"
+      });
+      await loadMenuItems();
+    } catch (error) {
+      console.error('Error deleting menu item:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el elemento",
+        variant: "destructive"
+      });
     }
   };
 
@@ -248,33 +207,55 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     }
 
     setIsUploading(true);
+    
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('userId', hotelId); // Enviar el ID del usuario (hotelId)
+      // Create secure payload with validation
+      const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
+      
+      // Add security headers and make request with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_CONFIG.timeout);
 
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await fetch(WEBHOOK_CONFIG.url, {
         method: 'POST',
-        body: formData,
+        body: securePayload,
+        signal: controller.signal,
+        headers: {
+          'X-Timestamp': new Date().toISOString(),
+          'X-Hotel-ID': hotelId
+        }
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         toast({
-          title: "Menú importado",
-          description: "El archivo ha sido enviado exitosamente"
+          title: "Éxito",
+          description: "Archivo enviado correctamente para procesamiento"
         });
         setShowImportDialog(false);
         setSelectedFile(null);
-        // Recargar el menú después de la importación
-        await loadMenuItems();
+        // Reload menu after processing
+        setTimeout(() => loadMenuItems(), 2000);
       } else {
-        throw new Error('Error en la respuesta del webhook');
+        const errorText = await response.text().catch(() => 'Error desconocido');
+        throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
       }
-    } catch (error) {
-      console.error('Error importing menu:', error);
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      
+      let errorMessage = "No se pudo procesar el archivo";
+      if (error.name === 'AbortError') {
+        errorMessage = "La solicitud ha tardado demasiado. Inténtalo de nuevo";
+      } else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+        errorMessage = "Error de conexión. Verifica tu conexión a internet";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "No se pudo importar el menú",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -301,93 +282,127 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Gestión de Menú</h2>
-        <div className="flex gap-3">
+        <h1 className="text-2xl font-bold text-white">Gestión del Menú</h1>
+        <div className="flex gap-2">
           <Button onClick={() => setShowImportDialog(true)} variant="outline">
             <Upload className="h-4 w-4 mr-2" />
             Importar Menú
           </Button>
-          <Button onClick={() => setShowAddDialog(true)}>
+          <Button onClick={() => setShowDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Agregar Item
+            Agregar Elemento
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {menuItems.map((item) => (
-          <Card key={item.id} className={`${!item.available ? 'opacity-60' : ''}`}>
+          <Card key={item.id}>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
                 <CardTitle className="text-lg">{item.name}</CardTitle>
-                <div className="flex gap-2">
-                  <Switch
-                    checked={item.available}
-                    onCheckedChange={() => handleToggleAvailability(item.id, item.available)}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEditItem(item)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Badge variant={item.available ? "default" : "secondary"}>
+                  {item.available ? "Disponible" : "No disponible"}
+                </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {item.description && (
-                <p className="text-sm text-gray-600">{item.description}</p>
-              )}
-              
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-600" />
-                <span className="font-bold text-green-600">€{item.price.toFixed(2)}</span>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-lg font-bold text-green-600">€{item.price}</span>
+                {item.preparation_time && (
+                  <span className="text-sm text-gray-500">{item.preparation_time} min</span>
+                )}
               </div>
-
-              {item.preparation_time && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm">{item.preparation_time} min</span>
-                </div>
-              )}
-
-              {item.ingredients && (
-                <div className="flex items-start gap-2">
-                  <Package className="h-4 w-4 text-orange-600 mt-0.5" />
-                  <span className="text-sm text-gray-600">{item.ingredients}</span>
-                </div>
-              )}
-
-              <Badge variant={item.available ? "default" : "secondary"}>
-                {item.available ? "Disponible" : "No disponible"}
-              </Badge>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {menuItems.length === 0 && (
-        <div className="text-center py-12">
-          <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay items en el menú</h3>
-          <p className="text-gray-500 mb-4">Comienza agregando items a tu menú</p>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar Primer Item
-          </Button>
-        </div>
-      )}
+      {/* Add/Edit Dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Elemento" : "Agregar Nuevo Elemento"}
+            </DialogTitle>
+          </DialogHeader>
 
-      {/* Diálogo para importar menú */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nombre *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="price">Precio (€) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prep-time">Tiempo (min)</Label>
+                <Input
+                  id="prep-time"
+                  type="number"
+                  value={formData.preparation_time}
+                  onChange={(e) => setFormData({ ...formData, preparation_time: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ingredients">Ingredientes</Label>
+              <Textarea
+                id="ingredients"
+                value={formData.ingredients}
+                onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editingItem ? "Actualizar" : "Crear"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={handleCloseImportDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -400,18 +415,16 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
               <Input
                 id="file"
                 type="file"
-                accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
-                onChange={handleFileSelect}
+                accept=".pdf,.xlsx,.xls,.csv,.json,.txt"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               />
-              {selectedFile && (
-                <p className="text-sm text-gray-600">
-                  Archivo seleccionado: {selectedFile.name}
-                </p>
-              )}
+              <p className="text-sm text-gray-500">
+                Formatos permitidos: PDF, Excel, CSV, JSON, TXT (máx. 10MB)
+              </p>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={handleCloseImportDialog} className="flex-1">
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={handleCloseImportDialog}>
                 Cancelar
               </Button>
               <Button 
@@ -420,90 +433,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
                 disabled={isUploading || !selectedFile}
               >
                 {isUploading ? "Enviando..." : "Importar"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Diálogo para agregar/editar item */}
-      <Dialog open={showAddDialog} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingItem ? 'Editar Item' : 'Agregar Nuevo Item'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nombre *</Label>
-              <Input
-                id="name"
-                placeholder="Nombre del plato"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea
-                id="description"
-                placeholder="Descripción del plato"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="price">Precio (€) *</Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={formData.price}
-                onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="preparation_time">Tiempo de preparación (minutos)</Label>
-              <Input
-                id="preparation_time"
-                type="number"
-                placeholder="15"
-                value={formData.preparation_time}
-                onChange={(e) => setFormData(prev => ({ ...prev, preparation_time: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ingredients">Ingredientes</Label>
-              <Textarea
-                id="ingredients"
-                placeholder="Lista de ingredientes"
-                value={formData.ingredients}
-                onChange={(e) => setFormData(prev => ({ ...prev, ingredients: e.target.value }))}
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="available"
-                checked={formData.available}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, available: checked }))}
-              />
-              <Label htmlFor="available">Disponible</Label>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={handleCloseDialog} className="flex-1">
-                Cancelar
-              </Button>
-              <Button onClick={handleSaveItem} className="flex-1">
-                {editingItem ? 'Actualizar' : 'Agregar'}
               </Button>
             </div>
           </div>

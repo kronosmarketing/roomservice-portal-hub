@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Trash, AlertTriangle } from "lucide-react";
+import { validateOrderId, sanitizeInput } from "@/utils/inputValidation";
 
 interface DeleteOrderDialogProps {
   isOpen: boolean;
@@ -21,7 +22,9 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
   const { toast } = useToast();
 
   const deleteOrder = async () => {
-    if (!orderId.trim()) {
+    const sanitizedOrderId = sanitizeInput(orderId);
+    
+    if (!sanitizedOrderId) {
       toast({
         title: "Error",
         description: "Por favor, introduce un ID de pedido",
@@ -30,13 +33,23 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       return;
     }
 
+    // Validate order ID format for security
+    if (!validateOrderId(sanitizedOrderId)) {
+      toast({
+        title: "Error",
+        description: "Formato de ID de pedido inválido",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
-    console.log('🗑️ Iniciando eliminación de pedido:', orderId.trim(), 'para hotel:', hotelId);
+    console.log('🗑️ Iniciando eliminación de pedido:', sanitizedOrderId, 'para hotel:', hotelId);
     
     try {
-      // Usar la función de base de datos corregida para eliminar el pedido
+      // Use the secure database function that validates hotel ownership
       const { error } = await supabase.rpc('delete_order_with_items', {
-        order_id_param: orderId.trim(),
+        order_id_param: sanitizedOrderId,
         hotel_id_param: hotelId
       });
 
@@ -49,11 +62,11 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       
       toast({
         title: "Pedido eliminado",
-        description: `El pedido #${orderId.trim().substring(0, 8)} ha sido eliminado completamente`,
+        description: `El pedido #${sanitizedOrderId.substring(0, 8)} ha sido eliminado completamente`,
       });
 
-      // Notificar al componente padre para actualizar la lista
-      onOrderDeleted(orderId.trim());
+      // Notify parent component to update the list
+      onOrderDeleted(sanitizedOrderId);
       handleClose();
 
     } catch (error: any) {
@@ -63,9 +76,11 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       
       if (error.message) {
         if (error.message.includes('no encontrado') || error.message.includes('not found')) {
-          errorMessage = `No se encontró el pedido con ID: ${orderId.trim().substring(0, 8)}`;
-        } else if (error.message.includes('access denied') || error.message.includes('acceso denegado')) {
+          errorMessage = `No se encontró el pedido con ID: ${sanitizedOrderId.substring(0, 8)}`;
+        } else if (error.message.includes('Access denied') || error.message.includes('Hotel ID mismatch')) {
           errorMessage = "No tienes permiso para eliminar este pedido";
+        } else if (error.message.includes('Invalid order ID format')) {
+          errorMessage = "Formato de ID de pedido inválido";
         } else {
           errorMessage = error.message;
         }
@@ -117,6 +132,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
               onChange={(e) => setOrderId(e.target.value)}
               className="font-mono"
               disabled={loading}
+              maxLength={255}
             />
             <p className="text-sm text-gray-500">
               Puedes usar el ID completo o solo los primeros 8 caracteres (ej: a1b2c3d4)
