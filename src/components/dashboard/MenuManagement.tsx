@@ -33,7 +33,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -44,6 +43,9 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     ingredients: ""
   });
   const { toast } = useToast();
+
+  // URL del webhook predefinida
+  const WEBHOOK_URL = "https://n8n-n8n.url.url.host/webhook/";
 
   useEffect(() => {
     if (hotelId) {
@@ -236,10 +238,10 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   };
 
   const handleImportMenu = async () => {
-    if (!selectedFile || !webhookUrl) {
+    if (!selectedFile) {
       toast({
         title: "Error",
-        description: "Por favor selecciona un archivo y proporciona la URL del webhook",
+        description: "Por favor selecciona un archivo",
         variant: "destructive"
       });
       return;
@@ -249,9 +251,9 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
-      formData.append('hotelId', hotelId);
+      formData.append('userId', hotelId); // Enviar el ID del usuario (hotelId)
 
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(WEBHOOK_URL, {
         method: 'POST',
         body: formData,
       });
@@ -263,7 +265,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         });
         setShowImportDialog(false);
         setSelectedFile(null);
-        setWebhookUrl("");
         // Recargar el menú después de la importación
         await loadMenuItems();
       } else {
@@ -284,7 +285,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const handleCloseImportDialog = () => {
     setShowImportDialog(false);
     setSelectedFile(null);
-    setWebhookUrl("");
   };
 
   if (loading) {
@@ -396,16 +396,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="webhook">URL del Webhook *</Label>
-              <Input
-                id="webhook"
-                placeholder="https://hooks.zapier.com/hooks/catch/..."
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="file">Archivo del Menú *</Label>
               <Input
                 id="file"
@@ -427,7 +417,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
               <Button 
                 onClick={handleImportMenu} 
                 className="flex-1"
-                disabled={isUploading || !selectedFile || !webhookUrl}
+                disabled={isUploading || !selectedFile}
               >
                 {isUploading ? "Enviando..." : "Importar"}
               </Button>
