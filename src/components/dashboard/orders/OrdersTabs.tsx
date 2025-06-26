@@ -1,9 +1,11 @@
+
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed, Search } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed, Search, Hash, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
@@ -77,75 +79,122 @@ const OrderCard = ({
   onCancelOrder: (orderId: string) => void;
   onPrintOrder: (order: Order) => void;
   showAllActions?: boolean;
-}) => (
-  <Card className="mb-4">
-    <CardHeader className="pb-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <CardTitle className="text-lg">Habitación {sanitizeInput(order.roomNumber)}</CardTitle>
-          <p className="text-sm text-gray-500">
-            Pedido #{order.id.substring(0, 8)} • {formatTime(order.timestamp)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className={getStatusColor(order.status)}>
-            {getStatusIcon(order.status)}
-            {order.status}
-          </Badge>
-          <span className="text-lg font-bold">{formatPrice(order.total)}</span>
-        </div>
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="space-y-2 mb-4">
-        <div className="flex justify-between items-center">
+}) => {
+  const { toast } = useToast();
+
+  const copyOrderId = async (orderId: string) => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      toast({
+        title: "ID copiado",
+        description: `ID del pedido copiado al portapapeles`,
+      });
+    } catch (error) {
+      console.error('Error copiando ID:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el ID",
+        variant: "destructive"
+      });
+    }
+  };
+
+  return (
+    <Card className="mb-4">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
           <div>
-            <span className="font-medium">{sanitizeInput(order.items)}</span>
+            <CardTitle className="text-lg">Habitación {sanitizeInput(order.roomNumber)}</CardTitle>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-1">
+                <Hash className="h-3 w-3" />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1 cursor-pointer group">
+                        <span className="font-mono">
+                          #{order.id.substring(0, 8)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => copyOrderId(order.id)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Hacer clic para copiar ID completo</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <span>•</span>
+              <span>{formatTime(order.timestamp)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={getStatusColor(order.status)}>
+              {getStatusIcon(order.status)}
+              {order.status}
+            </Badge>
+            <span className="text-lg font-bold">{formatPrice(order.total)}</span>
           </div>
         </div>
-      </div>
-      
-      {order.specialInstructions && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-          <p className="text-sm">
-            <strong>Instrucciones especiales:</strong> {sanitizeInput(order.specialInstructions)}
-          </p>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <span className="font-medium">{sanitizeInput(order.items)}</span>
+            </div>
+          </div>
         </div>
-      )}
-      
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-600">
-          Método de pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
-        </div>
-        <div className="flex gap-2">
-          {(showAllActions || order.status !== 'completado') && (
-            <OrderStatusButton order={order} onStatusChange={onStatusChange} />
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onPrintOrder(order)}
-            className="flex items-center gap-1"
-          >
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
-          {order.status !== 'completado' && order.status !== 'cancelado' && (
+        
+        {order.specialInstructions && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+            <p className="text-sm">
+              <strong>Instrucciones especiales:</strong> {sanitizeInput(order.specialInstructions)}
+            </p>
+          </div>
+        )}
+        
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            Método de pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
+          </div>
+          <div className="flex gap-2">
+            {(showAllActions || order.status !== 'completado') && (
+              <OrderStatusButton order={order} onStatusChange={onStatusChange} />
+            )}
             <Button
               size="sm"
-              variant="destructive"
-              onClick={() => onCancelOrder(order.id)}
+              variant="outline"
+              onClick={() => onPrintOrder(order)}
               className="flex items-center gap-1"
             >
-              <X className="h-4 w-4" />
-              Cancelar
+              <Printer className="h-4 w-4" />
+              Imprimir
             </Button>
-          )}
+            {order.status !== 'completado' && order.status !== 'cancelado' && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => onCancelOrder(order.id)}
+                className="flex items-center gap-1"
+              >
+                <X className="h-4 w-4" />
+                Cancelar
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: OrdersTabsProps) => {
   const [showReports, setShowReports] = useState(false);
