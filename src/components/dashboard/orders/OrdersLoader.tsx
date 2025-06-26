@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Order, DayStats } from "./types";
-import { formatOrderFromDatabase, formatOrderFromOrdersWithItems } from "./orderUtils";
+import { formatOrderFromDatabase } from "./orderUtils";
 
 interface OrdersLoaderProps {
   hotelId: string;
@@ -26,7 +26,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       onLoadingChange(true);
       console.log('🔄 Cargando pedidos para hotel:', hotelId);
 
-      // Cargar pedidos directamente desde la tabla orders con sus items
+      // Cargar pedidos directamente desde la tabla orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
@@ -54,6 +54,9 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
               .select(`
                 id,
                 quantity,
+                unit_price,
+                total_price,
+                special_instructions,
                 menu_item:menu_items (
                   id,
                   name,
@@ -66,6 +69,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
           })
         );
         
+        console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
         onOrdersLoaded(ordersWithItems);
       }
 
