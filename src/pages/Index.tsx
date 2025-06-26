@@ -56,8 +56,8 @@ const Index = () => {
       <main className="flex-1 flex flex-col items-center justify-center container mx-auto px-4 text-center">
         {/* Microphone Icon */}
         <div className="mb-12">
-          <div className="w-24 h-24 bg-blue-500/30 rounded-full flex items-center justify-center mb-8">
-            <Mic className="w-12 h-12 text-blue-300" />
+          <div className="w-32 h-32 bg-blue-500/30 rounded-full flex items-center justify-center mb-8 animate-[float_3s_ease-in-out_infinite] hover:scale-110 transition-transform duration-300">
+            <Mic className="w-16 h-16 text-blue-300" />
           </div>
         </div>
 
