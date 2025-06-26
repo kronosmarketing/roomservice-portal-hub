@@ -6,6 +6,7 @@ import EmailAuthForm from "./EmailAuthForm";
 import OAuthButtons from "./OAuthButtons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ const AuthModal = ({ isOpen, onClose, mode, onModeChange }: AuthModalProps) => {
     phoneRoomservice: ''
   });
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -68,9 +70,12 @@ const AuthModal = ({ isOpen, onClose, mode, onModeChange }: AuthModalProps) => {
           title: "¡Bienvenido!",
           description: "Has iniciado sesión correctamente.",
         });
+
+        // Cerrar modal y redirigir al dashboard
+        onClose();
+        navigate('/dashboard');
       }
       
-      onClose();
     } catch (error: any) {
       toast({
         title: "Error",
