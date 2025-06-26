@@ -8,8 +8,10 @@ import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye } fr
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
+import { validateUserHotelAccess, sanitizeInput, validateOrderId } from "./securityUtils";
 import OrderReportsDialog from "./OrderReportsDialog";
 import DeleteOrderDialog from "./DeleteOrderDialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface OrdersTabsProps {
   orders: Order[];
@@ -79,7 +81,7 @@ const OrderCard = ({
     <CardHeader className="pb-3">
       <div className="flex items-center justify-between">
         <div>
-          <CardTitle className="text-lg">Habitación {order.roomNumber}</CardTitle>
+          <CardTitle className="text-lg">Habitación {sanitizeInput(order.roomNumber)}</CardTitle>
           <p className="text-sm text-gray-500">
             Pedido #{order.id.substring(0, 8)} • {formatTime(order.timestamp)}
           </p>
@@ -97,20 +99,22 @@ const OrderCard = ({
       <div className="space-y-2 mb-4">
         <div className="flex justify-between items-center">
           <div>
-            <span className="font-medium">{order.items}</span>
+            <span className="font-medium">{sanitizeInput(order.items)}</span>
           </div>
         </div>
       </div>
       
       {order.specialInstructions && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-          <p className="text-sm"><strong>Instrucciones especiales:</strong> {order.specialInstructions}</p>
+          <p className="text-sm">
+            <strong>Instrucciones especiales:</strong> {sanitizeInput(order.specialInstructions)}
+          </p>
         </div>
       )}
       
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-600">
-          Método de pago: {order.paymentMethod || 'habitacion'}
+          Método de pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
         </div>
         <div className="flex gap-2">
           {(showAllActions || order.status !== 'completado') && (
@@ -145,6 +149,7 @@ const OrderCard = ({
 const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: OrdersTabsProps) => {
   const [showReports, setShowReports] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { toast } = useToast();
 
   const pendingOrders = orders.filter(order => order.status === 'pendiente');
   const preparingOrders = orders.filter(order => order.status === 'preparando');
@@ -152,13 +157,57 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
+      // Validar entrada
+      if (!validateOrderId(orderId)) {
+        toast({
+          title: "Error",
+          description: "ID de pedido inválido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar acceso al hotel
+      const hasAccess = await validateUserHotelAccess(hotelId);
+      if (!hasAccess) {
+        toast({
+          title: "Error de autorización",
+          description: "No tienes permiso para modificar este pedido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar estados permitidos
+      const allowedStatuses = ['pendiente', 'preparando', 'completado', 'cancelado'];
+      if (!allowedStatuses.includes(newStatus)) {
+        toast({
+          title: "Error",
+          description: "Estado de pedido inválido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('🔄 Actualizando estado del pedido:', { orderId: orderId.substring(0, 8), newStatus });
+
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .eq('hotel_id', hotelId);
+        .update({ 
+          status: newStatus, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error actualizando status:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo actualizar el estado del pedido",
+          variant: "destructive"
+        });
+        return;
+      }
 
       // Actualizar el estado local
       const updatedOrders = orders.map(order => 
@@ -182,20 +231,63 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         totalPlatos: 0
       });
 
+      toast({
+        title: "Estado actualizado",
+        description: `Pedido #${orderId.substring(0, 8)} marcado como ${newStatus}`,
+      });
+
     } catch (error) {
       console.error('Error actualizando status:', error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al actualizar el pedido",
+        variant: "destructive"
+      });
     }
   };
 
   const handleCancelOrder = async (orderId: string) => {
     try {
+      // Validar entrada
+      if (!validateOrderId(orderId)) {
+        toast({
+          title: "Error",
+          description: "ID de pedido inválido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar acceso al hotel
+      const hasAccess = await validateUserHotelAccess(hotelId);
+      if (!hasAccess) {
+        toast({
+          title: "Error de autorización",
+          description: "No tienes permiso para cancelar este pedido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('❌ Cancelando pedido:', orderId.substring(0, 8));
+
       const { error } = await supabase
         .from('orders')
-        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .eq('hotel_id', hotelId);
+        .update({ 
+          status: 'cancelado', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error cancelando pedido:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo cancelar el pedido",
+          variant: "destructive"
+        });
+        return;
+      }
 
       // Actualizar el estado local
       const updatedOrders = orders.map(order => 
@@ -219,136 +311,180 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         totalPlatos: 0
       });
 
+      toast({
+        title: "Pedido cancelado",
+        description: `Pedido #${orderId.substring(0, 8)} ha sido cancelado`,
+      });
+
     } catch (error) {
       console.error('Error cancelando pedido:', error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al cancelar el pedido",
+        variant: "destructive"
+      });
     }
   };
 
   const handlePrintOrder = (order: Order) => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      const currentTime = new Date().toLocaleString('es-ES');
-      
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Ticket - Pedido #${order.id.substring(0, 8)}</title>
-            <style>
-              @media print {
-                @page { 
-                  size: 80mm auto; 
-                  margin: 0; 
+    try {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const currentTime = new Date().toLocaleString('es-ES');
+        
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Ticket - Pedido #${order.id.substring(0, 8)}</title>
+              <style>
+                @media print {
+                  @page { 
+                    size: 80mm auto; 
+                    margin: 0; 
+                  }
                 }
-              }
-              body { 
-                font-family: 'Courier New', monospace; 
-                font-size: 12px;
-                margin: 0;
-                padding: 10px;
-                width: 80mm;
-                line-height: 1.2;
-              }
-              .center { text-align: center; }
-              .bold { font-weight: bold; }
-              .separator { 
-                border-top: 1px dashed #000; 
-                margin: 10px 0; 
-              }
-              .row {
-                display: flex;
-                justify-content: space-between;
-                margin: 2px 0;
-              }
-              .total-section {
-                margin-top: 15px;
-                padding-top: 10px;
-                border-top: 2px solid #000;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="center bold">
-              === PEDIDO #${order.id.substring(0, 8)} ===
-            </div>
-            <div class="center">
-              Habitación: ${order.roomNumber}
-            </div>
-            <div class="center">
-              ${order.timestamp}
-            </div>
-            
-            <div class="separator"></div>
-            
-            <div class="bold">PRODUCTOS:</div>
-            <div>${order.items}</div>
-            
-            ${order.specialInstructions ? `
-            <div class="separator"></div>
-            <div class="bold">INSTRUCCIONES:</div>
-            <div>${order.specialInstructions}</div>
-            ` : ''}
-            
-            <div class="separator"></div>
-            
-            <div class="row">
-              <span>Estado:</span>
-              <span class="bold">${order.status.toUpperCase()}</span>
-            </div>
-            <div class="row">
-              <span>Pago:</span>
-              <span>${order.paymentMethod}</span>
-            </div>
-            
-            <div class="total-section">
-              <div class="row bold">
-                <span>TOTAL:</span>
-                <span>${formatPrice(order.total)}</span>
+                body { 
+                  font-family: 'Courier New', monospace; 
+                  font-size: 12px;
+                  margin: 0;
+                  padding: 10px;
+                  width: 80mm;
+                  line-height: 1.2;
+                }
+                .center { text-align: center; }
+                .bold { font-weight: bold; }
+                .separator { 
+                  border-top: 1px dashed #000; 
+                  margin: 10px 0; 
+                }
+                .row {
+                  display: flex;
+                  justify-content: space-between;
+                  margin: 2px 0;
+                }
+                .total-section {
+                  margin-top: 15px;
+                  padding-top: 10px;
+                  border-top: 2px solid #000;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="center bold">
+                === PEDIDO #${order.id.substring(0, 8)} ===
               </div>
-            </div>
-            
-            <div class="separator"></div>
-            
-            <div class="center">
-              Impreso: ${currentTime}
-            </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 250);
+              <div class="center">
+                Habitación: ${sanitizeInput(order.roomNumber)}
+              </div>
+              <div class="center">
+                ${order.timestamp}
+              </div>
+              
+              <div class="separator"></div>
+              
+              <div class="bold">PRODUCTOS:</div>
+              <div>${sanitizeInput(order.items)}</div>
+              
+              ${order.specialInstructions ? `
+              <div class="separator"></div>
+              <div class="bold">INSTRUCCIONES:</div>
+              <div>${sanitizeInput(order.specialInstructions)}</div>
+              ` : ''}
+              
+              <div class="separator"></div>
+              
+              <div class="row">
+                <span>Estado:</span>
+                <span class="bold">${order.status.toUpperCase()}</span>
+              </div>
+              <div class="row">
+                <span>Pago:</span>
+                <span>${sanitizeInput(order.paymentMethod || 'habitacion')}</span>
+              </div>
+              
+              <div class="total-section">
+                <div class="row bold">
+                  <span>TOTAL:</span>
+                  <span>${formatPrice(order.total)}</span>
+                </div>
+              </div>
+              
+              <div class="separator"></div>
+              
+              <div class="center">
+                Impreso: ${currentTime}
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      }
+    } catch (error) {
+      console.error('Error imprimiendo pedido:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo imprimir el pedido",
+        variant: "destructive"
+      });
     }
   };
 
-  const handleOrderDeleted = (deletedOrderId: string) => {
-    console.log('🔄 Actualizando lista tras eliminar:', deletedOrderId);
-    
-    // Filtrar el pedido eliminado de la lista
-    const updatedOrders = orders.filter(order => {
-      const orderIdShort = order.id.substring(0, 8);
-      const deletedIdShort = deletedOrderId.substring(0, 8);
-      return order.id !== deletedOrderId && orderIdShort !== deletedIdShort;
-    });
-    
-    console.log('📊 Pedidos antes:', orders.length, 'después:', updatedOrders.length);
-    
-    onOrdersChange(updatedOrders);
+  const handleOrderDeleted = async (deletedOrderId: string) => {
+    try {
+      console.log('🔄 Actualizando lista tras eliminar:', deletedOrderId);
+      
+      // Validar acceso al hotel antes de proceder
+      const hasAccess = await validateUserHotelAccess(hotelId);
+      if (!hasAccess) {
+        toast({
+          title: "Error de autorización",
+          description: "No tienes permiso para eliminar pedidos",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Filtrar el pedido eliminado de la lista
+      const updatedOrders = orders.filter(order => {
+        const orderIdShort = order.id.substring(0, 8);
+        const deletedIdShort = deletedOrderId.substring(0, 8);
+        return order.id !== deletedOrderId && orderIdShort !== deletedIdShort;
+      });
+      
+      console.log('📊 Pedidos antes:', orders.length, 'después:', updatedOrders.length);
+      
+      onOrdersChange(updatedOrders);
 
-    // Recalcular estadísticas
-    const completedCount = updatedOrders.filter(o => o.status === 'completado').length;
-    const totalSales = updatedOrders
-      .filter(o => o.status === 'completado')
-      .reduce((sum, order) => sum + order.total, 0);
+      // Recalcular estadísticas
+      const completedCount = updatedOrders.filter(o => o.status === 'completado').length;
+      const totalSales = updatedOrders
+        .filter(o => o.status === 'completado')
+        .reduce((sum, order) => sum + order.total, 0);
 
-    onDayStatsChange({
-      totalFinalizados: completedCount,
-      ventasDelDia: totalSales,
-      platosDisponibles: 0,
-      totalPlatos: 0
-    });
+      onDayStatsChange({
+        totalFinalizados: completedCount,
+        ventasDelDia: totalSales,
+        platosDisponibles: 0,
+        totalPlatos: 0
+      });
+
+      toast({
+        title: "Pedido eliminado",
+        description: `Pedido #${deletedOrderId.substring(0, 8)} eliminado correctamente`,
+      });
+    } catch (error) {
+      console.error('Error procesando eliminación:', error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al procesar la eliminación",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

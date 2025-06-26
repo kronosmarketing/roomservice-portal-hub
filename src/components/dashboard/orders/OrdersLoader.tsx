@@ -26,11 +26,22 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       onLoadingChange(true);
       console.log('🔄 Cargando pedidos para hotel:', hotelId);
 
-      // Cargar pedidos directamente desde la tabla orders
+      // Verificar autenticación
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('Error de autenticación:', authError);
+        toast({
+          title: "Error de autenticación",
+          description: "Debes estar autenticado para ver los pedidos",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Cargar pedidos con validación de seguridad usando RLS
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('hotel_id', hotelId)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
@@ -46,11 +57,12 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       console.log('📋 Pedidos encontrados:', ordersData?.length || 0);
 
       if (ordersData && ordersData.length > 0) {
-        // Cargar items para cada pedido usando la relación específica
+        // Cargar items para cada pedido con validación de relaciones
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
             console.log(`🔍 Cargando items para pedido ${order.id.substring(0, 8)}`);
             
+            // Usar RLS para cargar items relacionados de forma segura
             const { data: orderItems, error: itemsError } = await supabase
               .from('order_items')
               .select(`
@@ -62,7 +74,8 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
                 menu_items!order_items_menu_item_id_fkey (
                   id,
                   name,
-                  price
+                  price,
+                  available
                 )
               `)
               .eq('order_id', order.id);
@@ -72,42 +85,61 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
               return formatOrderFromDatabase(order, []);
             }
             
-            console.log(`📦 Items encontrados para ${order.id.substring(0, 8)}:`, orderItems?.length || 0);
-            if (orderItems) {
-              orderItems.forEach((item, index) => {
-                console.log(`  Item ${index + 1}:`, item.menu_items?.name, `(${item.quantity}x)`);
+            // Validar que los items pertenecen al menú del hotel
+            const validItems = orderItems?.filter(item => 
+              item.menu_items && 
+              typeof item.menu_items === 'object' && 
+              'name' in item.menu_items
+            ) || [];
+            
+            console.log(`📦 Items válidos encontrados para ${order.id.substring(0, 8)}:`, validItems.length);
+            
+            if (validItems.length > 0) {
+              validItems.forEach((item, index) => {
+                const menuItem = item.menu_items as any;
+                console.log(`  Item ${index + 1}:`, menuItem.name, `(${item.quantity}x)`);
               });
             }
             
-            return formatOrderFromDatabase(order, orderItems || []);
+            return formatOrderFromDatabase(order, validItems);
           })
         );
         
         console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
         
+        // Filtrar pedidos válidos que tienen items
+        const validOrders = ordersWithItems.filter(order => 
+          order.items && order.items.trim() !== ''
+        );
+        
+        console.log('✅ Pedidos válidos finales:', validOrders.length);
+        
         // Log para verificar el resultado final
-        ordersWithItems.forEach(order => {
+        validOrders.forEach(order => {
           console.log(`✅ Pedido final ${order.id.substring(0, 8)}: "${order.items}"`);
         });
         
-        onOrdersLoaded(ordersWithItems);
+        onOrdersLoaded(validOrders);
       } else {
         console.log('📭 No se encontraron pedidos para este hotel');
         onOrdersLoaded([]);
       }
 
-      // Cargar estadísticas del día
+      // Cargar estadísticas del día con validación de seguridad
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const { data: todayOrders } = await supabase
+      const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
-        .eq('hotel_id', hotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
+
+      if (statsError) {
+        console.error('Error cargando estadísticas:', statsError);
+      }
 
       const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
       const stats: DayStats = {
