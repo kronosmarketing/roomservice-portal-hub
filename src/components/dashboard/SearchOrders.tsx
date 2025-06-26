@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Search, Calendar, MapPin, Package, Hash, Copy } from "lucide-react";
@@ -200,7 +201,7 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
       await navigator.clipboard.writeText(orderId);
       toast({
         title: "ID copiado",
-        description: `ID del pedido ${orderId.substring(0, 8)}... copiado al portapapeles`,
+        description: `ID del pedido copiado al portapapeles`,
       });
     } catch (error) {
       console.error('Error copiando ID:', error);
@@ -235,20 +236,30 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 group">
+              <div className="flex items-center gap-1">
                 <Hash className="h-4 w-4 text-gray-500" />
-                <span className="font-mono text-sm font-medium">
-                  #{order.id.substring(0, 8)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => copyOrderId(order.id)}
-                  title="Copiar ID completo"
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1 cursor-pointer group">
+                        <span className="font-mono text-sm font-medium">
+                          #{order.id.substring(0, 8)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => copyOrderId(order.id)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Hacer clic para copiar ID completo</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               <div className="flex items-center gap-1">
                 <MapPin className="h-4 w-4 text-gray-500" />
