@@ -95,26 +95,28 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       setUpdating(orderId);
-      console.log('🔄 Actualizando pedido:', orderId, 'a estado:', newStatus);
+      console.log('🔄 Actualizando pedido:', orderId.substring(0, 8), 'a estado:', newStatus);
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', orderId)
-        .eq('hotel_id', hotelId)
-        .select();
+        .eq('hotel_id', hotelId);
 
       if (error) {
         console.error('❌ Error actualizando estado:', error);
         toast({
           title: "Error",
-          description: "No se pudo actualizar el estado del pedido",
+          description: "No se pudo actualizar el estado del pedido: " + error.message,
           variant: "destructive"
         });
         return;
       }
 
-      console.log('✅ Pedido actualizado correctamente:', data);
+      console.log('✅ Pedido actualizado correctamente');
 
       // Actualizar el estado local
       const updatedOrders = orders.map(order => 
@@ -154,7 +156,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
       toast({
         title: "Estado actualizado",
-        description: `Pedido marcado como ${newStatus}`,
+        description: `Pedido #${orderId.substring(0, 8)} marcado como ${newStatus}`,
       });
 
     } catch (error) {

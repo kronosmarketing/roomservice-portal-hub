@@ -19,6 +19,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
   const [orderId, setOrderId] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmationStep, setConfirmationStep] = useState(false);
+  const [foundOrder, setFoundOrder] = useState<any>(null);
   const { toast } = useToast();
 
   const searchOrder = async () => {
@@ -63,6 +64,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       }
 
       // Mostrar confirmación
+      setFoundOrder(orders[0]);
       setConfirmationStep(true);
 
     } catch (error) {
@@ -78,11 +80,13 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
   };
 
   const deleteOrder = async () => {
+    if (!foundOrder) return;
+    
     setLoading(true);
     try {
       // Usar la función de base de datos para eliminar el pedido y sus items
       const { error } = await supabase.rpc('delete_order_with_items', {
-        order_id_param: orderId.length > 8 ? orderId : orderId + '%',
+        order_id_param: foundOrder.id,
         hotel_id_param: hotelId
       });
 
@@ -95,7 +99,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
         description: "El pedido ha sido eliminado completamente de la base de datos",
       });
 
-      onOrderDeleted(orderId);
+      onOrderDeleted(foundOrder.id);
       handleClose();
 
     } catch (error) {
@@ -113,6 +117,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
   const handleClose = () => {
     setOrderId("");
     setConfirmationStep(false);
+    setFoundOrder(null);
     onClose();
   };
 
@@ -168,11 +173,22 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
               </div>
             </div>
 
-            <div className="bg-gray-50 p-3 rounded border">
-              <p className="text-sm">
-                <strong>ID:</strong> <span className="font-mono">{orderId}</span>
-              </p>
-            </div>
+            {foundOrder && (
+              <div className="bg-gray-50 p-3 rounded border space-y-2">
+                <p className="text-sm">
+                  <strong>ID:</strong> <span className="font-mono">{foundOrder.id}</span>
+                </p>
+                <p className="text-sm">
+                  <strong>Habitación:</strong> {foundOrder.room_number}
+                </p>
+                <p className="text-sm">
+                  <strong>Total:</strong> €{parseFloat(foundOrder.total).toFixed(2)}
+                </p>
+                <p className="text-sm">
+                  <strong>Estado:</strong> {foundOrder.status}
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <Button 
