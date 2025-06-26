@@ -24,7 +24,7 @@ const Index = () => {
       <header className="container mx-auto px-4 py-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-bold text-white">RoomService Portal</h1>
+            <h1 className="text-2xl font-bold text-white">MarjorAi Portal</h1>
             <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
               Seguro
             </Badge>
@@ -48,7 +48,7 @@ const Index = () => {
 
         {/* Main Title */}
         <h1 className="text-6xl font-bold text-white mb-8">
-          RoomService<span className="text-orange-400">AI</span>
+          Marjor<span className="text-orange-400">AI</span>
         </h1>
 
         {/* Subtitle */}
@@ -59,7 +59,7 @@ const Index = () => {
         {/* Description */}
         <p className="text-lg text-white/80 mb-12 max-w-3xl leading-relaxed">
           Permite a tus huéspedes hacer pedidos simplemente hablando en su idioma natural.
-          RoomServiceAI gestiona todo el proceso, desde la toma de pedidos hasta la entrega.
+          MarjorAI gestiona todo el proceso, desde la toma de pedidos hasta la entrega.
         </p>
 
         {/* Action Buttons */}
