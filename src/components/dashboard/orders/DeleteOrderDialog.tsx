@@ -34,7 +34,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
     console.log('🗑️ Iniciando eliminación de pedido:', orderId.trim(), 'para hotel:', hotelId);
     
     try {
-      // Usar la función de base de datos para eliminar el pedido y sus items
+      // Usar la función de base de datos corregida para eliminar el pedido
       const { error } = await supabase.rpc('delete_order_with_items', {
         order_id_param: orderId.trim(),
         hotel_id_param: hotelId
@@ -62,7 +62,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       let errorMessage = "No se pudo eliminar el pedido.";
       
       if (error.message) {
-        if (error.message.includes('not found') || error.message.includes('no encontrado')) {
+        if (error.message.includes('no encontrado') || error.message.includes('not found')) {
           errorMessage = `No se encontró el pedido con ID: ${orderId.trim().substring(0, 8)}`;
         } else if (error.message.includes('access denied') || error.message.includes('acceso denegado')) {
           errorMessage = "No tienes permiso para eliminar este pedido";

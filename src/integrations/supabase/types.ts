@@ -407,9 +407,7 @@ export type Database = {
         Returns: boolean
       }
       delete_order_with_items: {
-        Args:
-          | { order_id_param: string; hotel_id_param: string }
-          | { order_id_param: string; hotel_id_param: string }
+        Args: { order_id_param: string; hotel_id_param: string }
         Returns: undefined
       }
       encrypt_password: {
