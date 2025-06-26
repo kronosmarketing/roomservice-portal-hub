@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Mic } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AuthModal from "@/components/auth/AuthModal";
 
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -17,6 +20,16 @@ const Index = () => {
       navigate('/dashboard');
     }
   }, [user, navigate]);
+
+  const handleAccessClick = () => {
+    setAuthMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleRegisterClick = () => {
+    setAuthMode('register');
+    setIsAuthModalOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 flex flex-col">
@@ -29,11 +42,13 @@ const Index = () => {
               Seguro
             </Badge>
           </div>
-          <Link to="/auth">
-            <Button variant="outline" className="bg-white/10 text-white border-white/30 hover:bg-white/20">
-              Iniciar Sesión
-            </Button>
-          </Link>
+          <Button 
+            variant="outline" 
+            className="bg-white/10 text-white border-white/30 hover:bg-white/20"
+            onClick={handleAccessClick}
+          >
+            Iniciar Sesión
+          </Button>
         </div>
       </header>
 
@@ -64,19 +79,19 @@ const Index = () => {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-4 w-full max-w-md">
-          <Link to="/auth" className="w-full">
-            <Button 
-              size="lg" 
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white text-lg py-6 rounded-xl font-semibold"
-            >
-              Acceder
-            </Button>
-          </Link>
+          <Button 
+            size="lg" 
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white text-lg py-6 rounded-xl font-semibold"
+            onClick={handleAccessClick}
+          >
+            Acceder
+          </Button>
           
           <Button 
             variant="outline" 
             size="lg" 
             className="w-full bg-transparent border-2 border-white/30 text-white hover:bg-white/10 text-lg py-6 rounded-xl font-semibold"
+            onClick={handleRegisterClick}
           >
             🏨 Registrar Hotel
           </Button>
@@ -85,6 +100,14 @@ const Index = () => {
 
       {/* Footer spacer */}
       <div className="h-16"></div>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        mode={authMode}
+        onModeChange={setAuthMode}
+      />
     </div>
   );
 };
