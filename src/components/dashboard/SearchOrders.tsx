@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Search, Calendar, MapPin, Package, Hash } from "lucide-react";
+import { ArrowLeft, Search, Calendar, MapPin, Package, Hash, Copy } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { Order } from "./orders/types";
@@ -24,6 +24,9 @@ interface SearchOrdersProps {
 
 const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [roomFilter, setRoomFilter] = useState("");
+  const [idFilter, setIdFilter] = useState("");
   const [archivedOrders, setArchivedOrders] = useState<Order[]>([]);
   const [todayOrders, setTodayOrders] = useState<Order[]>([]);
   const [filteredArchivedOrders, setFilteredArchivedOrders] = useState<Order[]>([]);
@@ -39,7 +42,7 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
 
   useEffect(() => {
     filterOrders();
-  }, [searchTerm, archivedOrders, todayOrders]);
+  }, [searchTerm, dateFilter, roomFilter, idFilter, archivedOrders, todayOrders]);
 
   const loadOrders = async () => {
     try {
@@ -138,28 +141,75 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
   };
 
   const filterOrders = () => {
-    if (!searchTerm.trim()) {
-      setFilteredArchivedOrders(archivedOrders);
-      setFilteredTodayOrders(todayOrders);
-      return;
+    let filteredArchived = archivedOrders;
+    let filteredToday = todayOrders;
+
+    // Filtro por término general
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      const filterOrder = (order: Order) => {
+        return (
+          order.id.toLowerCase().includes(searchLower) ||
+          order.roomNumber.toLowerCase().includes(searchLower) ||
+          order.items.toLowerCase().includes(searchLower) ||
+          order.timestamp.toLowerCase().includes(searchLower) ||
+          order.paymentMethod.toLowerCase().includes(searchLower) ||
+          order.status.toLowerCase().includes(searchLower) ||
+          (order.specialInstructions && order.specialInstructions.toLowerCase().includes(searchLower))
+        );
+      };
+      filteredArchived = filteredArchived.filter(filterOrder);
+      filteredToday = filteredToday.filter(filterOrder);
     }
 
-    const searchLower = searchTerm.toLowerCase();
+    // Filtro por fecha
+    if (dateFilter.trim()) {
+      const filterByDate = (order: Order) => {
+        return order.timestamp.includes(dateFilter);
+      };
+      filteredArchived = filteredArchived.filter(filterByDate);
+      filteredToday = filteredToday.filter(filterByDate);
+    }
 
-    const filterOrder = (order: Order) => {
-      return (
-        order.id.toLowerCase().includes(searchLower) ||
-        order.roomNumber.toLowerCase().includes(searchLower) ||
-        order.items.toLowerCase().includes(searchLower) ||
-        order.timestamp.toLowerCase().includes(searchLower) ||
-        order.paymentMethod.toLowerCase().includes(searchLower) ||
-        order.status.toLowerCase().includes(searchLower) ||
-        (order.specialInstructions && order.specialInstructions.toLowerCase().includes(searchLower))
-      );
-    };
+    // Filtro por habitación
+    if (roomFilter.trim()) {
+      const roomLower = roomFilter.toLowerCase();
+      const filterByRoom = (order: Order) => {
+        return order.roomNumber.toLowerCase().includes(roomLower);
+      };
+      filteredArchived = filteredArchived.filter(filterByRoom);
+      filteredToday = filteredToday.filter(filterByRoom);
+    }
 
-    setFilteredArchivedOrders(archivedOrders.filter(filterOrder));
-    setFilteredTodayOrders(todayOrders.filter(filterOrder));
+    // Filtro por ID
+    if (idFilter.trim()) {
+      const idLower = idFilter.toLowerCase();
+      const filterById = (order: Order) => {
+        return order.id.toLowerCase().includes(idLower);
+      };
+      filteredArchived = filteredArchived.filter(filterById);
+      filteredToday = filteredToday.filter(filterById);
+    }
+
+    setFilteredArchivedOrders(filteredArchived);
+    setFilteredTodayOrders(filteredToday);
+  };
+
+  const copyOrderId = async (orderId: string) => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      toast({
+        title: "ID copiado",
+        description: `ID del pedido ${orderId.substring(0, 8)}... copiado al portapapeles`,
+      });
+    } catch (error) {
+      console.error('Error copiando ID:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el ID",
+        variant: "destructive"
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -185,11 +235,20 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 group">
                 <Hash className="h-4 w-4 text-gray-500" />
                 <span className="font-mono text-sm font-medium">
                   #{order.id.substring(0, 8)}
                 </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => copyOrderId(order.id)}
+                  title="Copiar ID completo"
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
               </div>
               <div className="flex items-center gap-1">
                 <MapPin className="h-4 w-4 text-gray-500" />
@@ -255,23 +314,59 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Buscar Pedidos
+            Filtros de Búsqueda
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Búsqueda general</label>
+              <Input
+                placeholder="Buscar en todos los campos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Fecha</label>
+              <Input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Habitación</label>
+              <Input
+                placeholder="Ej: 101, 205..."
+                value={roomFilter}
+                onChange={(e) => setRoomFilter(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">ID del pedido</label>
+              <Input
+                placeholder="ID completo o parcial..."
+                value={idFilter}
+                onChange={(e) => setIdFilter(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
-            <Input
-              placeholder="Buscar por número de pedido, fecha, habitación, productos..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-            <Button onClick={filterOrders}>
-              <Search className="h-4 w-4" />
+            <Button 
+              onClick={() => {
+                setSearchTerm("");
+                setDateFilter("");
+                setRoomFilter("");
+                setIdFilter("");
+              }}
+              variant="outline"
+            >
+              Limpiar filtros
             </Button>
           </div>
-          <p className="text-sm text-gray-500 mt-2">
-            Puedes buscar por: número de pedido, habitación, productos, fecha, método de pago, estado o instrucciones especiales
+          <p className="text-sm text-gray-500">
+            Puedes usar múltiples filtros a la vez. Pasa el cursor sobre el ID del pedido para ver el botón de copiar.
           </p>
         </CardContent>
       </Card>
@@ -303,7 +398,9 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  {searchTerm ? 'No se encontraron pedidos que coincidan con la búsqueda' : 'No hay pedidos para hoy'}
+                  {searchTerm || dateFilter || roomFilter || idFilter ? 
+                    'No se encontraron pedidos que coincidan con los filtros' : 
+                    'No hay pedidos para hoy'}
                 </div>
               )}
             </CardContent>
@@ -327,7 +424,9 @@ const SearchOrders = ({ hotelId, onBack }: SearchOrdersProps) => {
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  {searchTerm ? 'No se encontraron pedidos archivados que coincidan con la búsqueda' : 'No hay pedidos archivados'}
+                  {searchTerm || dateFilter || roomFilter || idFilter ? 
+                    'No se encontraron pedidos archivados que coincidan con los filtros' : 
+                    'No hay pedidos archivados'}
                 </div>
               )}
             </CardContent>

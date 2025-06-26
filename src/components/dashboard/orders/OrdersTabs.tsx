@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
@@ -11,6 +11,7 @@ import { validateUserHotelAccess, sanitizeInput, validateOrderId } from "./secur
 import OrderReportsDialog from "./OrderReportsDialog";
 import DeleteOrderDialog from "./DeleteOrderDialog";
 import DayClosure from "./DayClosure";
+import SearchOrders from "../SearchOrders";
 import { useToast } from "@/hooks/use-toast";
 
 interface OrdersTabsProps {
@@ -150,6 +151,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const [showReports, setShowReports] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDayClosure, setShowDayClosure] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const { toast } = useToast();
 
   const pendingOrders = orders.filter(order => order.status === 'pendiente');
@@ -648,6 +650,15 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     }
   };
 
+  if (showSearch) {
+    return (
+      <SearchOrders 
+        hotelId={hotelId}
+        onBack={() => setShowSearch(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex gap-3 flex-wrap">
@@ -674,6 +685,14 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         >
           <span className="font-bold text-purple-600">Z</span>
           Cierre Z
+        </Button>
+        <Button 
+          onClick={() => setShowSearch(true)}
+          variant="outline"
+          className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-300"
+        >
+          <Search className="h-4 w-4" />
+          Buscar Pedidos
         </Button>
         <Button 
           onClick={() => setShowDeleteDialog(true)}
