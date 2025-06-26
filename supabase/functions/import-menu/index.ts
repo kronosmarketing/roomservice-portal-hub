@@ -14,8 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    // Get the webhook URL - first try from environment, then use the configured one
-    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL') || 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
+    // Use the direct webhook URL for n8n
+    const WEBHOOK_URL = 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
     
     console.log('Using webhook URL:', WEBHOOK_URL)
 
