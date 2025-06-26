@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
@@ -62,7 +62,19 @@ const OrderStatusButton = ({ order, onStatusChange }: { order: Order; onStatusCh
   );
 };
 
-const OrderCard = ({ order, onStatusChange }: { order: Order; onStatusChange: (orderId: string, status: string) => void }) => (
+const OrderCard = ({ 
+  order, 
+  onStatusChange, 
+  onCancelOrder, 
+  onPrintOrder,
+  showAllActions = false 
+}: { 
+  order: Order; 
+  onStatusChange: (orderId: string, status: string) => void;
+  onCancelOrder: (orderId: string) => void;
+  onPrintOrder: (order: Order) => void;
+  showAllActions?: boolean;
+}) => (
   <Card className="mb-4">
     <CardHeader className="pb-3">
       <div className="flex items-center justify-between">
@@ -100,7 +112,31 @@ const OrderCard = ({ order, onStatusChange }: { order: Order; onStatusChange: (o
         <div className="text-sm text-gray-600">
           Método de pago: {order.paymentMethod || 'habitacion'}
         </div>
-        <OrderStatusButton order={order} onStatusChange={onStatusChange} />
+        <div className="flex gap-2">
+          {(showAllActions || order.status !== 'completado') && (
+            <OrderStatusButton order={order} onStatusChange={onStatusChange} />
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onPrintOrder(order)}
+            className="flex items-center gap-1"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </Button>
+          {order.status !== 'completado' && order.status !== 'cancelado' && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => onCancelOrder(order.id)}
+              className="flex items-center gap-1"
+            >
+              <X className="h-4 w-4" />
+              Cancelar
+            </Button>
+          )}
+        </div>
       </div>
     </CardContent>
   </Card>
@@ -151,6 +187,142 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     }
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .eq('id', orderId)
+        .eq('hotel_id', hotelId);
+
+      if (error) throw error;
+
+      // Actualizar el estado local
+      const updatedOrders = orders.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'cancelado' as Order['status'] }
+          : order
+      );
+      
+      onOrdersChange(updatedOrders);
+
+      // Recalcular estadísticas del día
+      const completedCount = updatedOrders.filter(o => o.status === 'completado').length;
+      const totalSales = updatedOrders
+        .filter(o => o.status === 'completado')
+        .reduce((sum, order) => sum + order.total, 0);
+
+      onDayStatsChange({
+        totalFinalizados: completedCount,
+        ventasDelDia: totalSales,
+        platosDisponibles: 0,
+        totalPlatos: 0
+      });
+
+    } catch (error) {
+      console.error('Error cancelando pedido:', error);
+    }
+  };
+
+  const handlePrintOrder = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const currentTime = new Date().toLocaleString('es-ES');
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Ticket - Pedido #${order.id.substring(0, 8)}</title>
+            <style>
+              @media print {
+                @page { 
+                  size: 80mm auto; 
+                  margin: 0; 
+                }
+              }
+              body { 
+                font-family: 'Courier New', monospace; 
+                font-size: 12px;
+                margin: 0;
+                padding: 10px;
+                width: 80mm;
+                line-height: 1.2;
+              }
+              .center { text-align: center; }
+              .bold { font-weight: bold; }
+              .separator { 
+                border-top: 1px dashed #000; 
+                margin: 10px 0; 
+              }
+              .row {
+                display: flex;
+                justify-content: space-between;
+                margin: 2px 0;
+              }
+              .total-section {
+                margin-top: 15px;
+                padding-top: 10px;
+                border-top: 2px solid #000;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="center bold">
+              === PEDIDO #${order.id.substring(0, 8)} ===
+            </div>
+            <div class="center">
+              Habitación: ${order.roomNumber}
+            </div>
+            <div class="center">
+              ${order.timestamp}
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div class="bold">PRODUCTOS:</div>
+            <div>${order.items}</div>
+            
+            ${order.specialInstructions ? `
+            <div class="separator"></div>
+            <div class="bold">INSTRUCCIONES:</div>
+            <div>${order.specialInstructions}</div>
+            ` : ''}
+            
+            <div class="separator"></div>
+            
+            <div class="row">
+              <span>Estado:</span>
+              <span class="bold">${order.status.toUpperCase()}</span>
+            </div>
+            <div class="row">
+              <span>Pago:</span>
+              <span>${order.paymentMethod}</span>
+            </div>
+            
+            <div class="total-section">
+              <div class="row bold">
+                <span>TOTAL:</span>
+                <span>${formatPrice(order.total)}</span>
+              </div>
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div class="center">
+              Impreso: ${currentTime}
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+  };
+
   const handleOrderDeleted = (deletedOrderId: string) => {
     console.log('🔄 Actualizando lista tras eliminar:', deletedOrderId);
     
@@ -187,7 +359,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           variant="outline"
           className="flex items-center gap-2"
         >
-          📊 Ver Reportes
+          <FileText className="h-4 w-4" />
+          Ver Informes
         </Button>
         <Button 
           onClick={() => setShowDeleteDialog(true)}
@@ -199,8 +372,12 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         </Button>
       </div>
 
-      <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="all" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <Eye className="h-4 w-4" />
+            Todos ({orders.length})
+          </TabsTrigger>
           <TabsTrigger value="pending" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Pendientes ({pendingOrders.length})
@@ -215,6 +392,23 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="all" className="mt-6">
+          {orders.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No hay pedidos</p>
+          ) : (
+            orders.map((order) => (
+              <OrderCard 
+                key={order.id} 
+                order={order} 
+                onStatusChange={handleStatusChange}
+                onCancelOrder={handleCancelOrder}
+                onPrintOrder={handlePrintOrder}
+                showAllActions={true}
+              />
+            ))
+          )}
+        </TabsContent>
+
         <TabsContent value="pending" className="mt-6">
           {pendingOrders.length === 0 ? (
             <p className="text-center text-gray-500 py-8">No hay pedidos pendientes</p>
@@ -224,6 +418,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                 key={order.id} 
                 order={order} 
                 onStatusChange={handleStatusChange}
+                onCancelOrder={handleCancelOrder}
+                onPrintOrder={handlePrintOrder}
               />
             ))
           )}
@@ -238,6 +434,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                 key={order.id} 
                 order={order} 
                 onStatusChange={handleStatusChange}
+                onCancelOrder={handleCancelOrder}
+                onPrintOrder={handlePrintOrder}
               />
             ))
           )}
@@ -252,6 +450,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                 key={order.id} 
                 order={order} 
                 onStatusChange={handleStatusChange}
+                onCancelOrder={handleCancelOrder}
+                onPrintOrder={handlePrintOrder}
               />
             ))
           )}
