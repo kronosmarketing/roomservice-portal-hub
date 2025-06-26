@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +21,7 @@ interface MenuItem {
   available: boolean;
   preparation_time: number;
   ingredients: string;
+  allergens: string[];
 }
 
 interface MenuManagementProps {
@@ -43,7 +43,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     price: "",
     category_id: "",
     preparation_time: "",
-    ingredients: ""
+    ingredients: "",
+    allergens: ""
   });
   const { toast } = useToast();
 
@@ -59,7 +60,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('hotel_id', hotelId)
         .order('name');
 
       if (error) throw error;
@@ -81,7 +81,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { data, error } = await supabase
         .from('menu_categories')
         .select('*')
-        .eq('hotel_id', hotelId)
         .order('name');
 
       if (error) throw error;
@@ -96,8 +95,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .update({ available: !currentAvailability })
-        .eq('id', itemId)
-        .eq('hotel_id', hotelId);
+        .eq('id', itemId);
 
       if (error) throw error;
       
@@ -120,6 +118,11 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     e.preventDefault();
     
     try {
+      const allergensList = formData.allergens
+        .split(',')
+        .map(allergen => allergen.trim())
+        .filter(allergen => allergen.length > 0);
+
       const itemData = {
         name: sanitizeInput(formData.name),
         description: sanitizeInput(formData.description),
@@ -127,6 +130,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         category_id: formData.category_id || null,
         preparation_time: parseInt(formData.preparation_time) || 0,
         ingredients: sanitizeInput(formData.ingredients),
+        allergens: allergensList,
         hotel_id: hotelId,
         available: true
       };
@@ -135,8 +139,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         const { error } = await supabase
           .from('menu_items')
           .update(itemData)
-          .eq('id', editingItem.id)
-          .eq('hotel_id', hotelId);
+          .eq('id', editingItem.id);
 
         if (error) throw error;
         toast({
@@ -163,7 +166,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         price: "",
         category_id: "",
         preparation_time: "",
-        ingredients: ""
+        ingredients: "",
+        allergens: ""
       });
       await loadMenuItems();
     } catch (error) {
@@ -184,7 +188,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       price: item.price.toString(),
       category_id: item.category_id || "",
       preparation_time: item.preparation_time?.toString() || "",
-      ingredients: item.ingredients || ""
+      ingredients: item.ingredients || "",
+      allergens: item.allergens?.join(', ') || ""
     });
     setShowDialog(true);
   };
@@ -196,8 +201,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .delete()
-        .eq('id', id)
-        .eq('hotel_id', hotelId);
+        .eq('id', id);
 
       if (error) throw error;
       
@@ -312,6 +316,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
                 <TableHead>Descripción</TableHead>
                 <TableHead>Precio</TableHead>
                 <TableHead>Tiempo (min)</TableHead>
+                <TableHead>Alérgenos</TableHead>
                 <TableHead>Disponible</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
@@ -323,6 +328,22 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
                   <TableCell className="max-w-xs truncate">{item.description}</TableCell>
                   <TableCell className="text-green-600 font-bold">€{item.price}</TableCell>
                   <TableCell>{item.preparation_time || '-'}</TableCell>
+                  <TableCell className="max-w-xs">
+                    {item.allergens && item.allergens.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {item.allergens.map((allergen, index) => (
+                          <span
+                            key={index}
+                            className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full"
+                          >
+                            {allergen}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">Sin alérgenos</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Switch
                       checked={item.available}
@@ -343,7 +364,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
               ))}
               {menuItems.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No hay elementos en el menú
                   </TableCell>
                 </TableRow>
@@ -414,6 +435,19 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
                 onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
                 rows={2}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="allergens">Alérgenos</Label>
+              <Input
+                id="allergens"
+                value={formData.allergens}
+                onChange={(e) => setFormData({ ...formData, allergens: e.target.value })}
+                placeholder="Separar por comas (ej: gluten, lácteos, frutos secos)"
+              />
+              <p className="text-sm text-gray-500">
+                Separar múltiples alérgenos con comas
+              </p>
             </div>
 
             <div className="flex justify-end gap-3">
