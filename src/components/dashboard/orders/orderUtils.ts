@@ -1,18 +1,20 @@
-
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Order, OrderItem } from "./types";
 
 export const formatOrderFromDatabase = (order: any, orderItems: any[]): Order => {
-  console.log('🔍 Formateando pedido:', order.id.substring(0, 8), 'con items:', orderItems.length);
+  console.log('🔍 Formateando pedido:', order.id.substring(0, 8), 'con items:', orderItems?.length || 0);
+  console.log('📊 Order items raw:', orderItems);
   
   let itemsText = '';
   
   if (orderItems && orderItems.length > 0) {
     itemsText = orderItems
       .map(item => {
+        console.log('🔍 Procesando item:', item);
         // Acceder al menu_item desde la relación
         const menuItem = item.menu_item;
+        console.log('🍽️ Menu item encontrado:', menuItem);
         const itemName = menuItem?.name || 'Item desconocido';
         const quantity = item.quantity || 1;
         console.log(`  - ${quantity}x ${itemName}`);
@@ -20,8 +22,8 @@ export const formatOrderFromDatabase = (order: any, orderItems: any[]): Order =>
       })
       .join(', ');
   } else {
-    console.log('  - Sin items encontrados');
-    itemsText = 'Sin items';
+    console.log('  - Sin items encontrados para pedido:', order.id.substring(0, 8));
+    itemsText = 'Sin items disponibles';
   }
 
   return {

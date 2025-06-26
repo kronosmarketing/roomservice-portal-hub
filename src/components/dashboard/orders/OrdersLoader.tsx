@@ -43,13 +43,15 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         return;
       }
 
-      if (ordersData) {
-        console.log('📋 Pedidos cargados:', ordersData.length);
-        
-        // Cargar items para cada pedido con los nombres de los platos
+      console.log('📋 Pedidos encontrados:', ordersData?.length || 0);
+
+      if (ordersData && ordersData.length > 0) {
+        // Cargar items para cada pedido con consulta mejorada
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
-            const { data: orderItems } = await supabase
+            console.log(`🔍 Cargando items para pedido ${order.id.substring(0, 8)}`);
+            
+            const { data: orderItems, error: itemsError } = await supabase
               .from('order_items')
               .select(`
                 id,
@@ -57,7 +59,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
                 unit_price,
                 total_price,
                 special_instructions,
-                menu_item:menu_items (
+                menu_item:menu_items!order_items_menu_item_id_fkey (
                   id,
                   name,
                   price
@@ -65,18 +67,33 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
               `)
               .eq('order_id', order.id);
             
+            if (itemsError) {
+              console.error(`Error cargando items para pedido ${order.id}:`, itemsError);
+              return formatOrderFromDatabase(order, []);
+            }
+            
+            console.log(`📦 Items encontrados para ${order.id.substring(0, 8)}:`, orderItems?.length || 0);
+            if (orderItems) {
+              orderItems.forEach((item, index) => {
+                console.log(`  Item ${index + 1}:`, item.menu_item?.name, `(${item.quantity}x)`);
+              });
+            }
+            
             return formatOrderFromDatabase(order, orderItems || []);
           })
         );
         
         console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
         
-        // Log para verificar los items de cada pedido
+        // Log para verificar el resultado final
         ordersWithItems.forEach(order => {
-          console.log(`Pedido ${order.id.substring(0, 8)}: ${order.items}`);
+          console.log(`✅ Pedido final ${order.id.substring(0, 8)}: "${order.items}"`);
         });
         
         onOrdersLoaded(ordersWithItems);
+      } else {
+        console.log('📭 No se encontraron pedidos para este hotel');
+        onOrdersLoaded([]);
       }
 
       // Cargar estadísticas del día
