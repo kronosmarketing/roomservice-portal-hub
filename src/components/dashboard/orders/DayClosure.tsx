@@ -31,12 +31,14 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Obtener todos los pedidos completados del día
-      const { data: completedOrders, error: ordersError } = await supabase
+      console.log('🔄 Iniciando cierre del día para hotel:', hotelId);
+
+      // Obtener todos los pedidos completados y cancelados del día
+      const { data: finishedOrders, error: ordersError } = await supabase
         .from('orders')
         .select('*')
         .eq('hotel_id', hotelId)
-        .eq('status', 'completado')
+        .in('status', ['completado', 'cancelado'])
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
@@ -44,14 +46,20 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         throw ordersError;
       }
 
-      if (!completedOrders || completedOrders.length === 0) {
+      if (!finishedOrders || finishedOrders.length === 0) {
         toast({
           title: "Sin pedidos",
-          description: "No hay pedidos completados para cerrar",
+          description: "No hay pedidos completados o cancelados para cerrar",
           variant: "destructive"
         });
         return;
       }
+
+      console.log('📋 Pedidos a archivar:', finishedOrders.length);
+
+      // Separar pedidos completados y cancelados para estadísticas
+      const completedOrders = finishedOrders.filter(order => order.status === 'completado');
+      const cancelledOrders = finishedOrders.filter(order => order.status === 'cancelado');
 
       // Calcular totales para el extracto
       const totalDinero = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
@@ -61,8 +69,8 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, number>);
 
-      // Archivar pedidos completados
-      const archivePromises = completedOrders.map(async (order) => {
+      // Archivar todos los pedidos (completados y cancelados)
+      const archivePromises = finishedOrders.map(async (order) => {
         // Obtener items del pedido
         const { data: orderItems } = await supabase
           .from('order_items')
@@ -103,13 +111,14 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       });
 
       await Promise.all(archivePromises);
+      console.log('✅ Pedidos archivados correctamente');
 
-      // Eliminar pedidos completados originales
+      // Eliminar pedidos originales (completados y cancelados)
       const { error: deleteError } = await supabase
         .from('orders')
         .delete()
         .eq('hotel_id', hotelId)
-        .eq('status', 'completado')
+        .in('status', ['completado', 'cancelado'])
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
@@ -117,10 +126,14 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         throw deleteError;
       }
 
+      console.log('🗑️ Pedidos originales eliminados');
+
       // Preparar datos del cierre
       const closureInfo = {
         fecha: today.toLocaleDateString('es-ES'),
-        totalPedidos: completedOrders.length,
+        totalPedidos: finishedOrders.length,
+        pedidosCompletados: completedOrders.length,
+        pedidosCancelados: cancelledOrders.length,
         totalDinero,
         metodosResumen,
         timestamp: new Date().toLocaleString('es-ES')
@@ -128,7 +141,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       setClosureData(closureInfo);
 
-      // Actualizar estado local (quitar pedidos completados)
+      // Actualizar estado local (quitar pedidos archivados)
       const { data: remainingOrders } = await supabase
         .from('orders')
         .select('*')
@@ -136,23 +149,45 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         .order('created_at', { ascending: false });
 
       if (remainingOrders) {
-        // Convertir a formato Order (simplificado para este ejemplo)
-        const formattedOrders: Order[] = remainingOrders.map(order => ({
-          id: order.id,
-          roomNumber: order.room_number,
-          items: 'Cargando items...', // Se actualizará con el tiempo real
-          total: parseFloat(order.total.toString()),
-          status: order.status as any,
-          timestamp: new Date(order.created_at).toLocaleDateString('es-ES'),
-          paymentMethod: order.payment_method || 'habitacion',
-          specialInstructions: order.special_instructions,
-          notes: order.notes
-        }));
+        // Convertir a formato Order con items
+        const formattedOrders: Order[] = await Promise.all(
+          remainingOrders.map(async (order) => {
+            const { data: orderItems } = await supabase
+              .from('order_items')
+              .select(`
+                id,
+                quantity,
+                menu_item:menu_items (
+                  id,
+                  name,
+                  price
+                )
+              `)
+              .eq('order_id', order.id);
+
+            const itemsText = orderItems?.map(item => {
+              const itemName = item.menu_item?.name || 'Item desconocido';
+              return `${item.quantity}x ${itemName}`;
+            }).join(', ') || 'Sin items';
+
+            return {
+              id: order.id,
+              roomNumber: order.room_number,
+              items: itemsText,
+              total: parseFloat(order.total.toString()),
+              status: order.status as any,
+              timestamp: new Date(order.created_at).toLocaleDateString('es-ES'),
+              paymentMethod: order.payment_method || 'habitacion',
+              specialInstructions: order.special_instructions,
+              notes: order.notes
+            };
+          })
+        );
         
         onOrdersChange(formattedOrders);
       }
 
-      // Actualizar estadísticas (resetear ya que se archivaron los completados)
+      // Resetear estadísticas (ya que se archivaron los completados)
       onDayStatsChange({
         totalFinalizados: 0,
         ventasDelDia: 0,
@@ -162,11 +197,11 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       toast({
         title: "Cierre completado",
-        description: `Se han archivado ${completedOrders.length} pedidos completados`,
+        description: `Se han archivado ${finishedOrders.length} pedidos (${completedOrders.length} completados, ${cancelledOrders.length} cancelados)`,
       });
 
     } catch (error) {
-      console.error('Error en cierre del día:', error);
+      console.error('❌ Error en cierre del día:', error);
       toast({
         title: "Error",
         description: "No se pudo completar el cierre del día",
@@ -188,17 +223,19 @@ Generado: ${closureData.timestamp}
 ═══════════════════════════════════
 
 RESUMEN DEL DÍA:
-• Total de pedidos completados: ${closureData.totalPedidos}
+• Total de pedidos procesados: ${closureData.totalPedidos}
+• Pedidos completados: ${closureData.pedidosCompletados}
+• Pedidos cancelados: ${closureData.pedidosCancelados}
 • Total recaudado: €${closureData.totalDinero.toFixed(2)}
 
-MÉTODOS DE PAGO:
+MÉTODOS DE PAGO (solo pedidos completados):
 ${Object.entries(closureData.metodosResumen).map(([metodo, cantidad]) => 
   `• ${metodo.charAt(0).toUpperCase() + metodo.slice(1)}: ${cantidad} pedidos`
 ).join('\n')}
 
 ═══════════════════════════════════
 
-Los pedidos completados han sido archivados.
+Los pedidos completados y cancelados han sido archivados.
 Fin del servicio del día.
     `;
 
@@ -235,6 +272,14 @@ Fin del servicio del día.
                   <span className="font-bold">{closureData.totalPedidos}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span>Completados:</span>
+                  <span className="font-bold text-green-600">{closureData.pedidosCompletados}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cancelados:</span>
+                  <span className="font-bold text-red-600">{closureData.pedidosCancelados}</span>
+                </div>
+                <div className="flex justify-between">
                   <span>Total recaudado:</span>
                   <span className="font-bold text-green-600">€{closureData.totalDinero.toFixed(2)}</span>
                 </div>
@@ -261,7 +306,7 @@ Fin del servicio del día.
               <div className="text-sm">
                 <p className="font-medium text-yellow-800">¿Confirmar cierre del día?</p>
                 <p className="text-yellow-700 mt-1">
-                  Esta acción archivará todos los pedidos completados y generará el extracto final. 
+                  Esta acción archivará todos los pedidos completados y cancelados, y generará el extracto final. 
                   No se puede deshacer.
                 </p>
               </div>

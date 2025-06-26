@@ -95,14 +95,17 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       setUpdating(orderId);
+      console.log('🔄 Actualizando pedido:', orderId, 'a estado:', newStatus);
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .update({ status: newStatus })
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .eq('hotel_id', hotelId)
+        .select();
 
       if (error) {
-        console.error('Error actualizando estado:', error);
+        console.error('❌ Error actualizando estado:', error);
         toast({
           title: "Error",
           description: "No se pudo actualizar el estado del pedido",
@@ -110,6 +113,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         });
         return;
       }
+
+      console.log('✅ Pedido actualizado correctamente:', data);
 
       // Actualizar el estado local
       const updatedOrders = orders.map(order => 
@@ -121,6 +126,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       if (newStatus === 'completado') {
         const completedOrder = orders.find(o => o.id === orderId);
         if (completedOrder) {
+          console.log('📊 Actualizando estadísticas para pedido completado');
           // Recalcular estadísticas del día
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -152,7 +158,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       });
 
     } catch (error) {
-      console.error('Error actualizando pedido:', error);
+      console.error('❌ Error inesperado actualizando pedido:', error);
       toast({
         title: "Error",
         description: "Error inesperado al actualizar el pedido",
@@ -249,7 +255,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                     className="bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Completar
+                    {updating === order.id ? 'Actualizando...' : 'Completar'}
                   </Button>
                   <Button
                     size="sm"
@@ -258,7 +264,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                     disabled={updating === order.id}
                   >
                     <X className="h-4 w-4 mr-1" />
-                    Cancelar
+                    {updating === order.id ? 'Actualizando...' : 'Cancelar'}
                   </Button>
                 </>
               )}
