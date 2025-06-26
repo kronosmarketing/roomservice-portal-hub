@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
 import OrderReportsDialog from "./OrderReportsDialog";
@@ -68,7 +69,7 @@ const OrderCard = ({ order, onStatusChange }: { order: Order; onStatusChange: (o
         <div>
           <CardTitle className="text-lg">Habitación {order.roomNumber}</CardTitle>
           <p className="text-sm text-gray-500">
-            Pedido #{order.id.substring(0, 8)} • {formatTime(order.createdAt)}
+            Pedido #{order.id.substring(0, 8)} • {formatTime(order.timestamp)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -82,19 +83,11 @@ const OrderCard = ({ order, onStatusChange }: { order: Order; onStatusChange: (o
     </CardHeader>
     <CardContent>
       <div className="space-y-2 mb-4">
-        {order.items && order.items.map((item: any, index: number) => (
-          <div key={index} className="flex justify-between items-center">
-            <div>
-              <span className="font-medium">{item.quantity}x {item.name}</span>
-              {item.special_instructions && (
-                <p className="text-sm text-gray-600 italic">
-                  Nota: {item.special_instructions}
-                </p>
-              )}
-            </div>
-            <span className="text-sm">{formatPrice(item.total_price)}</span>
+        <div className="flex justify-between items-center">
+          <div>
+            <span className="font-medium">{order.items}</span>
           </div>
-        ))}
+        </div>
       </div>
       
       {order.specialInstructions && (
@@ -134,7 +127,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       // Actualizar el estado local
       const updatedOrders = orders.map(order => 
         order.id === orderId 
-          ? { ...order, status: newStatus, updatedAt: new Date().toISOString() }
+          ? { ...order, status: newStatus as Order['status'] }
           : order
       );
       

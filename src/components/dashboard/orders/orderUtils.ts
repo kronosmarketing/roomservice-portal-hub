@@ -67,3 +67,45 @@ export const formatArchivedOrderFromDatabase = (order: any): Order => {
     notes: order.notes
   };
 };
+
+// Utility functions for formatting and display
+export const formatPrice = (price: number) => {
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(price);
+};
+
+export const formatTime = (timestamp: string) => {
+  return timestamp;
+};
+
+export const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'pendiente':
+      return 'border-yellow-500 text-yellow-700';
+    case 'preparando':
+      return 'border-blue-500 text-blue-700';
+    case 'completado':
+      return 'border-green-500 text-green-700';
+    case 'cancelado':
+      return 'border-red-500 text-red-700';
+    default:
+      return 'border-gray-500 text-gray-700';
+  }
+};
+
+export const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'pendiente':
+      return '⏳';
+    case 'preparando':
+      return '👨‍🍳';
+    case 'completado':
+      return '✅';
+    case 'cancelado':
+      return '❌';
+    default:
+      return '❓';
+  }
+};
