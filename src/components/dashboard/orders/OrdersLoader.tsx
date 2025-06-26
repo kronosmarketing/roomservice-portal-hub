@@ -46,7 +46,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       console.log('📋 Pedidos encontrados:', ordersData?.length || 0);
 
       if (ordersData && ordersData.length > 0) {
-        // Cargar items para cada pedido con consulta corregida
+        // Cargar items para cada pedido usando la relación específica
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
             console.log(`🔍 Cargando items para pedido ${order.id.substring(0, 8)}`);
@@ -59,7 +59,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
                 unit_price,
                 total_price,
                 special_instructions,
-                menu_items!menu_item_id (
+                menu_items!order_items_menu_item_id_fkey (
                   id,
                   name,
                   price
