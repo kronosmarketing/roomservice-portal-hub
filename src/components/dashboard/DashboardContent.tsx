@@ -15,15 +15,7 @@ interface DashboardContentProps {
 const DashboardContent = ({ user }: DashboardContentProps) => {
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  if (!user.hotelId) {
-    return (
-      <div className="container mx-auto px-6 py-8">
-        <div className="bg-white/10 rounded-lg p-8 text-center">
-          <p className="text-white/70 text-lg">Cargando panel...</p>
-        </div>
-      </div>
-    );
-  }
+  console.log("DashboardContent user data:", user);
 
   return (
     <main className="container mx-auto px-6 py-8">
@@ -53,7 +45,7 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
             className="flex items-center space-x-2 text-white data-[state=active]:bg-orange-500 data-[state=active]:text-white"
           >
             <ChefHat className="h-4 w-4" />
-            <span>Gestión de Menú</span>
+            <span>Gestionar Menú</span>
           </TabsTrigger>
         </TabsList>
 

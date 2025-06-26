@@ -17,23 +17,51 @@ const Dashboard = () => {
 
   useEffect(() => {
     const getUser = async () => {
+      console.log("Getting user data...");
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.log("No user found, redirecting to home");
         navigate('/');
         return;
       }
 
+      console.log("User found:", user.email);
       setUser(user);
       
       // Obtener perfil del usuario desde hotel_user_settings
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('hotel_user_settings')
         .select('*')
         .eq('id', user.id)
         .single();
       
-      setUserProfile(profile);
+      if (error) {
+        console.error("Error fetching profile:", error);
+        // Si no existe el perfil, creamos uno básico
+        const { data: newProfile, error: insertError } = await supabase
+          .from('hotel_user_settings')
+          .insert({
+            id: user.id,
+            email: user.email,
+            hotel_name: 'Mi Hotel',
+            agent_name: 'Agente',
+            user_role: 'hotel_manager',
+            is_active: true
+          })
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error("Error creating profile:", insertError);
+        } else {
+          setUserProfile(newProfile);
+        }
+      } else {
+        console.log("Profile found:", profile);
+        setUserProfile(profile);
+      }
+      
       setLoading(false);
     };
 
@@ -58,7 +86,7 @@ const Dashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700 flex items-center justify-center">
         <div className="text-white text-center">
           <Mic className="h-16 w-16 text-blue-400 bg-blue-400/20 rounded-full p-3 mx-auto mb-4 animate-pulse" />
-          <p>Cargando...</p>
+          <p>Cargando panel...</p>
         </div>
       </div>
     );
@@ -96,8 +124,8 @@ const Dashboard = () => {
       {/* Contenido del dashboard */}
       <DashboardContent 
         user={{
-          userRole: userProfile?.user_role,
-          hotelId: userProfile?.hotel_id
+          userRole: userProfile?.user_role || 'hotel_manager',
+          hotelId: userProfile?.id || user?.id
         }} 
       />
     </div>
