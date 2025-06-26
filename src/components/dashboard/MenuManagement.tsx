@@ -45,13 +45,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   });
   const { toast } = useToast();
 
-  // Secure webhook configuration
-  const WEBHOOK_CONFIG = {
-    url: "https://n8n-n8n.url.url.host/webhook/",
-    timeout: 30000, // 30 seconds
-    maxRetries: 3
-  };
-
   useEffect(() => {
     if (hotelId) {
       loadMenuItems();
@@ -212,42 +205,33 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       // Create secure payload with validation
       const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
       
-      // Add security headers and make request with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_CONFIG.timeout);
-
-      const response = await fetch(WEBHOOK_CONFIG.url, {
-        method: 'POST',
+      // Use our secure edge function instead of direct webhook call
+      const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
-        signal: controller.signal,
         headers: {
-          'X-Timestamp': new Date().toISOString(),
-          'X-Hotel-ID': hotelId
+          'X-Hotel-ID': hotelId,
+          'X-Timestamp': new Date().toISOString()
         }
       });
 
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        toast({
-          title: "Éxito",
-          description: "Archivo enviado correctamente para procesamiento"
-        });
-        setShowImportDialog(false);
-        setSelectedFile(null);
-        // Reload menu after processing
-        setTimeout(() => loadMenuItems(), 2000);
-      } else {
-        const errorText = await response.text().catch(() => 'Error desconocido');
-        throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
+      if (response.error) {
+        throw new Error(response.error.message || 'Error desconocido del servidor');
       }
+
+      toast({
+        title: "Éxito",
+        description: "Archivo enviado correctamente para procesamiento"
+      });
+      setShowImportDialog(false);
+      setSelectedFile(null);
+      // Reload menu after processing
+      setTimeout(() => loadMenuItems(), 2000);
+      
     } catch (error: any) {
       console.error('Error uploading file:', error);
       
       let errorMessage = "No se pudo procesar el archivo";
-      if (error.name === 'AbortError') {
-        errorMessage = "La solicitud ha tardado demasiado. Inténtalo de nuevo";
-      } else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+      if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
         errorMessage = "Error de conexión. Verifica tu conexión a internet";
       } else if (error.message) {
         errorMessage = error.message;
