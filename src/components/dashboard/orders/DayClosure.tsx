@@ -71,7 +71,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       // Archivar todos los pedidos (completados y cancelados)
       const archivePromises = finishedOrders.map(async (order) => {
-        // Obtener items del pedido
+        // Obtener items del pedido con consulta corregida
         const { data: orderItems } = await supabase
           .from('order_items')
           .select(`
@@ -80,7 +80,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
             unit_price,
             total_price,
             special_instructions,
-            menu_item:menu_items (
+            menu_items!menu_item_id (
               id,
               name,
               price
@@ -89,7 +89,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
           .eq('order_id', order.id);
 
         const itemsText = orderItems?.map(item => {
-          const itemName = item.menu_item?.name || 'Item desconocido';
+          const itemName = item.menu_items?.name || 'Item desconocido';
           return `${item.quantity}x ${itemName}`;
         }).join(', ') || 'Sin items';
 
@@ -157,7 +157,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
               .select(`
                 id,
                 quantity,
-                menu_item:menu_items (
+                menu_items!menu_item_id (
                   id,
                   name,
                   price
@@ -166,7 +166,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
               .eq('order_id', order.id);
 
             const itemsText = orderItems?.map(item => {
-              const itemName = item.menu_item?.name || 'Item desconocido';
+              const itemName = item.menu_items?.name || 'Item desconocido';
               return `${item.quantity}x ${itemName}`;
             }).join(', ') || 'Sin items';
 

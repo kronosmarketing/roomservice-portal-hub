@@ -13,7 +13,7 @@ export const formatOrderFromDatabase = (order: any, orderItems: any[]): Order =>
     itemsText = orderItems
       .map(item => {
         console.log('🔍 Procesando item:', item);
-        // Acceder al menu_items desde la relación (nota: cambié de menu_item a menu_items)
+        // Acceder al menu_items desde la relación
         const menuItem = item.menu_items;
         console.log('🍽️ Menu item encontrado:', menuItem);
         const itemName = menuItem?.name || 'Item desconocido';
