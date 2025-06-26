@@ -13,19 +13,23 @@ export const validateUserHotelAccess = async (hotelId: string): Promise<boolean>
       return false;
     }
 
-    // Verificar acceso al hotel usando la función de seguridad
-    const { data, error } = await supabase.rpc('get_user_hotel_id_by_email');
+    // Obtener el hotel del usuario por email
+    const { data: userSettings, error } = await supabase
+      .from('hotel_user_settings')
+      .select('id')
+      .eq('email', user.email)
+      .eq('is_active', true)
+      .single();
     
     if (error) {
-      console.error('❌ Error validando acceso al hotel:', error);
+      console.error('❌ Error obteniendo configuración del usuario:', error);
       return false;
     }
 
-    const userHotelId = data;
-    const hasAccess = userHotelId === hotelId;
+    const hasAccess = userSettings?.id === hotelId;
     
     console.log('🔐 Validación de acceso al hotel:', {
-      userHotelId,
+      userHotelId: userSettings?.id,
       requestedHotelId: hotelId,
       hasAccess
     });
