@@ -1,3 +1,4 @@
+
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Order, OrderItem } from "./types";
@@ -12,8 +13,8 @@ export const formatOrderFromDatabase = (order: any, orderItems: any[]): Order =>
     itemsText = orderItems
       .map(item => {
         console.log('🔍 Procesando item:', item);
-        // Acceder al menu_item desde la relación
-        const menuItem = item.menu_item;
+        // Acceder al menu_items desde la relación (nota: cambié de menu_item a menu_items)
+        const menuItem = item.menu_items;
         console.log('🍽️ Menu item encontrado:', menuItem);
         const itemName = menuItem?.name || 'Item desconocido';
         const quantity = item.quantity || 1;

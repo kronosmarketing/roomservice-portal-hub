@@ -46,7 +46,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       console.log('📋 Pedidos encontrados:', ordersData?.length || 0);
 
       if (ordersData && ordersData.length > 0) {
-        // Cargar items para cada pedido con consulta mejorada
+        // Cargar items para cada pedido con consulta simplificada
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
             console.log(`🔍 Cargando items para pedido ${order.id.substring(0, 8)}`);
@@ -59,7 +59,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
                 unit_price,
                 total_price,
                 special_instructions,
-                menu_item:menu_items!order_items_menu_item_id_fkey (
+                menu_items (
                   id,
                   name,
                   price
@@ -75,7 +75,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
             console.log(`📦 Items encontrados para ${order.id.substring(0, 8)}:`, orderItems?.length || 0);
             if (orderItems) {
               orderItems.forEach((item, index) => {
-                console.log(`  Item ${index + 1}:`, item.menu_item?.name, `(${item.quantity}x)`);
+                console.log(`  Item ${index + 1}:`, item.menu_items?.name, `(${item.quantity}x)`);
               });
             }
             

@@ -297,6 +297,13 @@ export type Database = {
             referencedRelation: "orders_with_items_backup"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "order_items_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
         ]
       }
       orders: {
