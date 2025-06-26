@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -420,7 +421,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                     .map(allergen => allergen.trim())
                     .filter(allergen => allergen.length > 0);
 
-                  const itemData = {
+                  const menuItemData = {
                     name: nameValidation.sanitizedValue,
                     description: descriptionValidation.sanitizedValue,
                     price: parseFloat(priceValidation.sanitizedValue),
@@ -435,7 +436,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   if (editingItem) {
                     const { error } = await supabase
                       .from('menu_items')
-                      .update(itemData)
+                      .update(menuItemData)
                       .eq('id', editingItem.id);
 
                     if (error) throw error;
@@ -447,14 +448,14 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   } else {
                     const { error } = await supabase
                       .from('menu_items')
-                      .insert([itemData]);
+                      .insert([menuItemData]);
 
                     if (error) throw error;
                     toast({
                       title: "Éxito",
                       description: "Elemento creado correctamente"
                     });
-                    await logSecurityEvent('menu_item_created', 'menu_items', itemData.name);
+                    await logSecurityEvent('menu_item_created', 'menu_items', menuItemData.name);
                   }
 
                   setShowDialog(false);
@@ -471,7 +472,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   await loadMenuItems();
                 } catch (error) {
                   console.error('Error saving menu item:', error);
-                  await logSecurityEvent('menu_item_save_error', 'menu_items', itemData.name, { error: String(error) });
+                  await logSecurityEvent('menu_item_save_error', 'menu_items', nameValidation.sanitizedValue, { error: String(error) });
                   toast({
                     title: "Error",
                     description: "No se pudo guardar el elemento",

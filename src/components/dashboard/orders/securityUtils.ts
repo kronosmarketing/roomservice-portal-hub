@@ -179,20 +179,19 @@ export const verifyAuthentication = async (): Promise<boolean> => {
 /**
  * Genera un hash seguro para validación de integridad
  */
-export const generateSecureHash = (data: string): string => {
-  // Usar Web Crypto API para generar hash
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-  
-  return crypto.subtle.digest('SHA-256', dataBuffer)
-    .then(hashBuffer => {
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    })
-    .catch(() => {
-      // Fallback simple si no está disponible crypto API
-      return btoa(data).replace(/[^a-zA-Z0-9]/g, '');
-    });
+export const generateSecureHash = async (data: string): Promise<string> => {
+  try {
+    // Usar Web Crypto API para generar hash
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (error) {
+    // Fallback simple si no está disponible crypto API
+    return btoa(data).replace(/[^a-zA-Z0-9]/g, '');
+  }
 };
 
 /**
