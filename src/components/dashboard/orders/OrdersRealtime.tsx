@@ -28,13 +28,13 @@ const OrdersRealtime = ({ hotelId, onNewOrder }: OrdersRealtimeProps) => {
         async (payload) => {
           console.log('📥 Nuevo pedido detectado:', payload);
           
-          // Cargar los items del pedido
+          // Cargar los items del pedido con los nombres de los platos
           const { data: orderItems } = await supabase
             .from('order_items')
             .select(`
               id,
               quantity,
-              menu_item:menu_item_id (
+              menu_item:menu_items (
                 id,
                 name,
                 price

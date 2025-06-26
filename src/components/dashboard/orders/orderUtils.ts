@@ -5,7 +5,10 @@ import { Order, OrderItem } from "./types";
 
 export const formatOrderFromDatabase = (order: any, orderItems: OrderItem[]): Order => {
   const itemsText = orderItems
-    .map(item => `${item.quantity}x ${item.menu_item?.name || 'Item desconocido'}`)
+    .map(item => {
+      const itemName = item.menu_item?.name || 'Item desconocido';
+      return `${item.quantity}x ${itemName}`;
+    })
     .join(', ');
 
   return {
@@ -22,10 +25,21 @@ export const formatOrderFromDatabase = (order: any, orderItems: OrderItem[]): Or
 };
 
 export const formatOrderFromOrdersWithItems = (order: any): Order => {
-  const items = order.items || [];
-  const itemsText = items
-    .map((item: any) => `${item.quantity}x ${item.name || 'Item desconocido'}`)
-    .join(', ');
+  let itemsText = '';
+  
+  if (order.items && Array.isArray(order.items)) {
+    itemsText = order.items
+      .map((item: any) => {
+        const itemName = item.name || item.menu_item?.name || 'Item desconocido';
+        const quantity = item.quantity || 1;
+        return `${quantity}x ${itemName}`;
+      })
+      .join(', ');
+  } else if (typeof order.items === 'string') {
+    itemsText = order.items;
+  } else {
+    itemsText = 'Items no disponibles';
+  }
 
   return {
     id: order.id,

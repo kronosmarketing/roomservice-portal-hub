@@ -26,62 +26,47 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       onLoadingChange(true);
       console.log('🔄 Cargando pedidos para hotel:', hotelId);
 
-      // Intentar cargar desde la vista orders_with_items primero
+      // Cargar pedidos directamente desde la tabla orders con sus items
       const { data: ordersData, error: ordersError } = await supabase
-        .from('orders_with_items')
+        .from('orders')
         .select('*')
         .eq('hotel_id', hotelId)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
-        console.error('Error cargando desde orders_with_items:', ordersError);
+        console.error('Error cargando pedidos:', ordersError);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los pedidos",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (ordersData) {
+        console.log('📋 Pedidos cargados:', ordersData.length);
         
-        // Fallback: cargar desde orders normal
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('hotel_id', hotelId)
-          .order('created_at', { ascending: false });
-
-        if (fallbackError) {
-          console.error('Error cargando pedidos:', fallbackError);
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los pedidos",
-            variant: "destructive"
-          });
-          return;
-        }
-
-        if (fallbackData) {
-          console.log('📋 Pedidos cargados (fallback):', fallbackData.length);
-          
-          // Cargar items para cada pedido
-          const ordersWithItems = await Promise.all(
-            fallbackData.map(async (order) => {
-              const { data: orderItems } = await supabase
-                .from('order_items')
-                .select(`
+        // Cargar items para cada pedido con los nombres de los platos
+        const ordersWithItems = await Promise.all(
+          ordersData.map(async (order) => {
+            const { data: orderItems } = await supabase
+              .from('order_items')
+              .select(`
+                id,
+                quantity,
+                menu_item:menu_items (
                   id,
-                  quantity,
-                  menu_item:menu_item_id (
-                    id,
-                    name,
-                    price
-                  )
-                `)
-                .eq('order_id', order.id);
-              
-              return formatOrderFromDatabase(order, orderItems || []);
-            })
-          );
-          
-          onOrdersLoaded(ordersWithItems);
-        }
-      } else {
-        console.log('📋 Pedidos cargados desde vista:', ordersData?.length || 0);
-        const formattedOrders = ordersData?.map(formatOrderFromOrdersWithItems) || [];
-        onOrdersLoaded(formattedOrders);
+                  name,
+                  price
+                )
+              `)
+              .eq('order_id', order.id);
+            
+            return formatOrderFromDatabase(order, orderItems || []);
+          })
+        );
+        
+        onOrdersLoaded(ordersWithItems);
       }
 
       // Cargar estadísticas del día
