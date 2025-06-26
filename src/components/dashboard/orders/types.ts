@@ -4,7 +4,7 @@ export interface Order {
   roomNumber: string;
   items: string;
   total: number;
-  status: 'pendiente' | 'preparando' | 'listo' | 'entregado' | 'cancelado';
+  status: 'pendiente' | 'preparando' | 'completado' | 'cancelado';
   timestamp: string;
   paymentMethod: string;
   specialInstructions?: string;

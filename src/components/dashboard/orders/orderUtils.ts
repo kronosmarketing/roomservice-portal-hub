@@ -5,7 +5,7 @@ import { Order, OrderItem } from "./types";
 
 export const formatOrderFromDatabase = (order: any, orderItems: OrderItem[]): Order => {
   const itemsText = orderItems
-    .map(item => `${item.quantity}x ${item.menu_item.name}`)
+    .map(item => `${item.quantity}x ${item.menu_item?.name || 'Item desconocido'}`)
     .join(', ');
 
   return {
@@ -24,7 +24,7 @@ export const formatOrderFromDatabase = (order: any, orderItems: OrderItem[]): Or
 export const formatOrderFromOrdersWithItems = (order: any): Order => {
   const items = order.items || [];
   const itemsText = items
-    .map((item: any) => `${item.quantity}x ${item.name}`)
+    .map((item: any) => `${item.quantity}x ${item.name || 'Item desconocido'}`)
     .join(', ');
 
   return {

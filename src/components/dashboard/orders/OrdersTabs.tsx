@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, MapPin, Package, Hash, CheckCircle, XCircle } from "lucide-react";
+import { Clock, MapPin, Package, Hash, CheckCircle } from "lucide-react";
 import { Order, DayStats } from "./types";
 
 interface OrdersTabsProps {
@@ -26,10 +26,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "preparando":
         return "bg-blue-100 text-blue-800 border-blue-200";
-      case "listo":
+      case "completado":
         return "bg-green-100 text-green-800 border-green-200";
-      case "entregado":
-        return "bg-gray-100 text-gray-800 border-gray-200";
       case "cancelado":
         return "bg-red-100 text-red-800 border-red-200";
       default:
@@ -61,6 +59,35 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         order.id === orderId ? { ...order, status: newStatus as any } : order
       );
       onOrdersChange(updatedOrders);
+
+      // Si se marca como completado, actualizar estadísticas
+      if (newStatus === 'completado') {
+        const completedOrder = orders.find(o => o.id === orderId);
+        if (completedOrder) {
+          // Recalcular estadísticas del día
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+
+          const { data: todayOrders } = await supabase
+            .from('orders')
+            .select('total, status')
+            .eq('hotel_id', hotelId)
+            .gte('created_at', today.toISOString())
+            .lt('created_at', tomorrow.toISOString());
+
+          const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
+          const stats: DayStats = {
+            totalFinalizados: completedOrders.length,
+            ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
+            platosDisponibles: 0,
+            totalPlatos: 0
+          };
+
+          onDayStatsChange(stats);
+        }
+      }
 
       toast({
         title: "Estado actualizado",
@@ -132,46 +159,15 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
             </div>
             
             <div className="flex gap-2">
-              {order.status === 'pendiente' && (
+              {(order.status === 'pendiente' || order.status === 'preparando') && (
                 <Button
                   size="sm"
-                  onClick={() => updateOrderStatus(order.id, 'preparando')}
-                  disabled={updating === order.id}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  Preparar
-                </Button>
-              )}
-              {order.status === 'preparando' && (
-                <Button
-                  size="sm"
-                  onClick={() => updateOrderStatus(order.id, 'listo')}
+                  onClick={() => updateOrderStatus(order.id, 'completado')}
                   disabled={updating === order.id}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="h-4 w-4 mr-1" />
-                  Listo
-                </Button>
-              )}
-              {order.status === 'listo' && (
-                <Button
-                  size="sm"
-                  onClick={() => updateOrderStatus(order.id, 'entregado')}
-                  disabled={updating === order.id}
-                  className="bg-gray-600 hover:bg-gray-700"
-                >
-                  Entregado
-                </Button>
-              )}
-              {['pendiente', 'preparando'].includes(order.status) && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => updateOrderStatus(order.id, 'cancelado')}
-                  disabled={updating === order.id}
-                >
-                  <XCircle className="h-4 w-4 mr-1" />
-                  Cancelar
+                  Completar
                 </Button>
               )}
             </div>
@@ -181,46 +177,19 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     </Card>
   );
 
-  const pendingOrders = filterOrdersByStatus(['pendiente']);
-  const preparingOrders = filterOrdersByStatus(['preparando']);
-  const readyOrders = filterOrdersByStatus(['listo']);
-  const completedOrders = filterOrdersByStatus(['entregado']);
+  const preparingOrders = filterOrdersByStatus(['pendiente', 'preparando']);
+  const completedOrders = filterOrdersByStatus(['completado']);
 
   return (
-    <Tabs defaultValue="pending" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="pending">
-          Pendientes ({pendingOrders.length})
-        </TabsTrigger>
+    <Tabs defaultValue="preparing" className="space-y-4">
+      <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="preparing">
           Preparando ({preparingOrders.length})
-        </TabsTrigger>
-        <TabsTrigger value="ready">
-          Listos ({readyOrders.length})
         </TabsTrigger>
         <TabsTrigger value="completed">
           Completados ({completedOrders.length})
         </TabsTrigger>
       </TabsList>
-
-      <TabsContent value="pending">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos Pendientes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pendingOrders.length > 0 ? (
-              pendingOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No hay pedidos pendientes
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
 
       <TabsContent value="preparing">
         <Card>
@@ -235,25 +204,6 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
             ) : (
               <div className="text-center py-8 text-gray-500">
                 No hay pedidos en preparación
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="ready">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos Listos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {readyOrders.length > 0 ? (
-              readyOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No hay pedidos listos
               </div>
             )}
           </CardContent>

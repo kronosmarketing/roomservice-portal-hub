@@ -97,9 +97,10 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
+      const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
       const stats: DayStats = {
-        totalFinalizados: todayOrders?.filter(o => o.status === 'entregado').length || 0,
-        ventasDelDia: todayOrders?.reduce((sum, order) => sum + parseFloat(order.total), 0) || 0,
+        totalFinalizados: completedOrders.length,
+        ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
         platosDisponibles: 0,
         totalPlatos: 0
       };
