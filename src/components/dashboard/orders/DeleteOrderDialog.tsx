@@ -31,6 +31,8 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
     }
 
     setLoading(true);
+    console.log('🗑️ Iniciando eliminación de pedido:', orderId.trim(), 'para hotel:', hotelId);
+    
     try {
       // Usar la función de base de datos para eliminar el pedido y sus items
       const { error } = await supabase.rpc('delete_order_with_items', {
@@ -39,22 +41,39 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
       });
 
       if (error) {
+        console.error('❌ Error de la función delete_order_with_items:', error);
         throw error;
       }
 
+      console.log('✅ Pedido eliminado exitosamente');
+      
       toast({
         title: "Pedido eliminado",
-        description: "El pedido ha sido eliminado completamente de la base de datos",
+        description: `El pedido #${orderId.trim().substring(0, 8)} ha sido eliminado completamente`,
       });
 
-      onOrderDeleted(orderId);
+      // Notificar al componente padre para actualizar la lista
+      onOrderDeleted(orderId.trim());
       handleClose();
 
-    } catch (error) {
-      console.error('Error eliminando pedido:', error);
+    } catch (error: any) {
+      console.error('❌ Error eliminando pedido:', error);
+      
+      let errorMessage = "No se pudo eliminar el pedido.";
+      
+      if (error.message) {
+        if (error.message.includes('not found') || error.message.includes('no encontrado')) {
+          errorMessage = `No se encontró el pedido con ID: ${orderId.trim().substring(0, 8)}`;
+        } else if (error.message.includes('access denied') || error.message.includes('acceso denegado')) {
+          errorMessage = "No tienes permiso para eliminar este pedido";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: "No se pudo eliminar el pedido. Verifica que el ID sea correcto.",
+        title: "Error al eliminar",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -97,6 +116,7 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
               className="font-mono"
+              disabled={loading}
             />
             <p className="text-sm text-gray-500">
               Puedes usar el ID completo o solo los primeros 8 caracteres (ej: a1b2c3d4)
@@ -104,7 +124,12 @@ const DeleteOrderDialog = ({ isOpen, onClose, hotelId, onOrderDeleted }: DeleteO
           </div>
 
           <div className="flex gap-3">
-            <Button variant="outline" onClick={handleClose} className="flex-1">
+            <Button 
+              variant="outline" 
+              onClick={handleClose} 
+              className="flex-1"
+              disabled={loading}
+            >
               Cancelar
             </Button>
             <Button 
