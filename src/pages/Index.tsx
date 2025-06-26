@@ -37,7 +37,7 @@ const Index = () => {
       <header className="container mx-auto px-4 py-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-bold text-white">MarjorAI</h1>
+            <h1 className="text-2xl font-bold text-white">Marjor<span className="text-orange-400">AI</span></h1>
             <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
               Seguro
             </Badge>
@@ -55,14 +55,14 @@ const Index = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center container mx-auto px-4 text-center">
         {/* Microphone Icon */}
-        <div className="mb-12">
-          <div className="w-32 h-32 bg-blue-500/30 rounded-full flex items-center justify-center mb-8 animate-[float_6s_ease-in-out_infinite] hover:scale-110 transition-transform duration-300">
+        <div className="mb-6">
+          <div className="w-32 h-32 bg-blue-500/30 rounded-full flex items-center justify-center mb-4 animate-[float_6s_ease-in-out_infinite] hover:scale-110 transition-transform duration-300">
             <Mic className="w-16 h-16 text-white" />
           </div>
         </div>
 
         {/* Main Title */}
-        <h1 className="text-6xl font-bold text-white mb-8">
+        <h1 className="text-7xl font-bold text-white mb-8">
           Marjor<span className="text-orange-400">AI</span>
         </h1>
 
