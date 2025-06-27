@@ -29,54 +29,87 @@ const Dashboard = () => {
       console.log("User found:", user.email);
       setUser(user);
       
-      // Buscar perfil por email en lugar de por ID
-      const { data: profile, error } = await supabase
-        .from('hotel_user_settings')
-        .select('*')
-        .eq('email', user.email)
-        .single();
-      
-      if (error) {
-        console.error("Error fetching profile:", error);
-        // Si no existe el perfil, creamos uno básico
-        const { data: newProfile, error: insertError } = await supabase
+      try {
+        // Buscar perfil en hotel_user_settings
+        const { data: profile, error } = await supabase
           .from('hotel_user_settings')
-          .insert({
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
-            user_role: 'hotel_manager',
-            is_active: true,
-            auth_provider: 'email'
-          })
-          .select()
-          .single();
+          .select('*')
+          .eq('email', user.email)
+          .maybeSingle();
         
-        if (insertError) {
-          console.error("Error creating profile:", insertError);
-          // Crear un perfil temporal para que funcione
-          setUserProfile({
-            id: user.id,
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
-            user_role: 'hotel_manager',
-            is_active: true
+        if (error) {
+          console.error("Error fetching profile:", error);
+          toast({
+            title: "Error",
+            description: "Error al cargar el perfil de usuario",
+            variant: "destructive",
           });
-        } else {
-          console.log("New profile created:", newProfile);
-          setUserProfile(newProfile);
+          return;
         }
-      } else {
-        console.log("Profile found:", profile);
-        setUserProfile(profile);
+
+        if (profile) {
+          console.log("Profile found:", profile);
+          setUserProfile(profile);
+        } else {
+          console.log("No profile found, creating new one");
+          // Crear perfil si no existe
+          const { data: newProfile, error: insertError } = await supabase
+            .from('hotel_user_settings')
+            .insert({
+              email: user.email,
+              hotel_name: 'Mi Hotel',
+              agent_name: 'Agente IA',
+              user_role: 'hotel_manager',
+              is_active: true,
+              auth_provider: 'email'
+            })
+            .select()
+            .single();
+          
+          if (insertError) {
+            console.error("Error creating profile:", insertError);
+            toast({
+              title: "Error",
+              description: "Error al crear el perfil de usuario",
+              variant: "destructive",
+            });
+            // Crear un perfil temporal
+            setUserProfile({
+              id: user.id,
+              email: user.email,
+              hotel_name: 'Mi Hotel',
+              agent_name: 'Agente IA',
+              user_role: 'hotel_manager',
+              is_active: true
+            });
+          } else {
+            console.log("New profile created:", newProfile);
+            setUserProfile(newProfile);
+          }
+        }
+      } catch (error) {
+        console.error("Unexpected error:", error);
+        toast({
+          title: "Error",
+          description: "Error inesperado al configurar el perfil",
+          variant: "destructive",
+        });
+        // Crear un perfil temporal para que funcione
+        setUserProfile({
+          id: user.id,
+          email: user.email,
+          hotel_name: 'Mi Hotel',
+          agent_name: 'Agente IA',
+          user_role: 'hotel_manager',
+          is_active: true
+        });
       }
       
       setLoading(false);
     };
 
     getUser();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
