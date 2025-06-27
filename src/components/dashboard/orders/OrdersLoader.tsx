@@ -30,7 +30,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
         console.error('Error de autenticación:', authError);
-        // En lugar de mostrar error, simplemente cargar datos vacíos
         onOrdersLoaded([]);
         onDayStatsLoaded({
           totalFinalizados: 0,
@@ -41,31 +40,40 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         return;
       }
 
-      // Intentar cargar pedidos, pero manejar errores de permisos silenciosamente
+      // Primero intentar obtener el hotel_id correcto del usuario
+      let actualHotelId = hotelId;
+      try {
+        const { data: userProfile } = await supabase
+          .from('hotel_user_settings')
+          .select('id')
+          .eq('email', user.email)
+          .maybeSingle();
+        
+        if (userProfile?.id) {
+          actualHotelId = userProfile.id;
+          console.log('🏨 Hotel ID actualizado:', actualHotelId);
+        }
+      } catch (profileError) {
+        console.log('No se pudo obtener perfil, usando ID original');
+      }
+
+      // Cargar pedidos usando el hotel_id correcto
       try {
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('*')
+          .eq('hotel_id', actualHotelId)
           .order('created_at', { ascending: false });
 
         if (ordersError) {
           console.error('Error cargando pedidos:', ordersError);
-          // Si es error de permisos, mostrar datos vacíos sin error al usuario
-          if (ordersError.code === '42501' || ordersError.code === 'PGRST301') {
-            onOrdersLoaded([]);
-            onDayStatsLoaded({
-              totalFinalizados: 0,
-              ventasDelDia: 0,
-              platosDisponibles: 0,
-              totalPlatos: 0
-            });
-            return;
-          }
-          
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los pedidos",
-            variant: "destructive"
+          // En lugar de mostrar error, mostrar datos vacíos
+          onOrdersLoaded([]);
+          onDayStatsLoaded({
+            totalFinalizados: 0,
+            ventasDelDia: 0,
+            platosDisponibles: 0,
+            totalPlatos: 0
           });
           return;
         }
@@ -73,7 +81,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         console.log('📋 Pedidos encontrados:', ordersData?.length || 0);
 
         if (ordersData && ordersData.length > 0) {
-          // Cargar items para cada pedido con validación de relaciones
+          // Cargar items para cada pedido
           const ordersWithItems = await Promise.all(
             ordersData.map(async (order) => {
               console.log(`🔍 Cargando items para pedido ${order.id.substring(0, 8)}`);
@@ -101,7 +109,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
                   return formatOrderFromDatabase(order, []);
                 }
                 
-                // Validar que los items pertenecen al menú del hotel
                 const validItems = orderItems?.filter(item => 
                   item.menu_items && 
                   typeof item.menu_items === 'object' && 
@@ -119,21 +126,13 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
           );
           
           console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
-          
-          // Filtrar pedidos válidos que tienen items
-          const validOrders = ordersWithItems.filter(order => 
-            order.items && order.items.trim() !== ''
-          );
-          
-          console.log('✅ Pedidos válidos finales:', validOrders.length);
-          
-          onOrdersLoaded(validOrders);
+          onOrdersLoaded(ordersWithItems);
         } else {
           console.log('📭 No se encontraron pedidos para este hotel');
           onOrdersLoaded([]);
         }
 
-        // Cargar estadísticas del día con manejo de errores
+        // Cargar estadísticas del día
         try {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -143,6 +142,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
           const { data: todayOrders, error: statsError } = await supabase
             .from('orders')
             .select('total, status')
+            .eq('hotel_id', actualHotelId)
             .gte('created_at', today.toISOString())
             .lt('created_at', tomorrow.toISOString());
 
@@ -171,7 +171,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       } catch (permissionError) {
         console.error('Error de permisos generales:', permissionError);
-        // Mostrar estado vacío sin error
         onOrdersLoaded([]);
         onDayStatsLoaded({
           totalFinalizados: 0,

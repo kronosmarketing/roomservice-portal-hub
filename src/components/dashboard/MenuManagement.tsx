@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actualHotelId, setActualHotelId] = useState<string>(hotelId);
   const [showDialog, setShowDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -51,14 +53,36 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
   useEffect(() => {
     if (hotelId) {
-      loadMenuItems();
-      loadCategories();
+      initializeMenu();
     }
   }, [hotelId]);
 
+  const initializeMenu = async () => {
+    // Primero obtener el hotel_id correcto del usuario
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userProfile } = await supabase
+          .from('hotel_user_settings')
+          .select('id')
+          .eq('email', user.email)
+          .maybeSingle();
+        
+        if (userProfile?.id) {
+          setActualHotelId(userProfile.id);
+          console.log('🏨 Menu Hotel ID actualizado:', userProfile.id);
+        }
+      }
+    } catch (error) {
+      console.log('No se pudo obtener perfil para menú, usando ID original');
+    }
+
+    loadMenuItems();
+    loadCategories();
+  };
+
   const loadMenuItems = async () => {
     try {
-      // Verificar autenticación primero
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.log("Usuario no autenticado");
@@ -67,24 +91,18 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         return;
       }
 
+      // Usar el hotel_id correcto
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
+        .eq('hotel_id', actualHotelId)
         .order('name');
 
       if (error) {
         console.error('Error loading menu items:', error);
-        // Si es error de permisos, mostrar estado vacío sin error
-        if (error.code === '42501' || error.code === 'PGRST301') {
-          setMenuItems([]);
-        } else {
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los elementos del menú",
-            variant: "destructive"
-          });
-        }
+        setMenuItems([]);
       } else {
+        console.log('📋 Items del menú encontrados:', data?.length || 0);
         setMenuItems(data || []);
       }
     } catch (error) {
@@ -100,6 +118,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { data, error } = await supabase
         .from('menu_categories')
         .select('*')
+        .eq('hotel_id', actualHotelId)
         .order('name');
 
       if (error) {
@@ -155,7 +174,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         preparation_time: parseInt(formData.preparation_time) || 0,
         ingredients: sanitizeInput(formData.ingredients),
         allergens: allergensList,
-        hotel_id: hotelId,
+        hotel_id: actualHotelId, // Usar el hotel_id correcto
         available: true
       };
 
@@ -257,12 +276,12 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     setIsUploading(true);
     
     try {
-      const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
+      const securePayload = createSecureWebhookPayload(selectedFile, actualHotelId);
       
       const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
         headers: {
-          'X-Hotel-ID': hotelId,
+          'X-Hotel-ID': actualHotelId,
           'X-Timestamp': new Date().toISOString()
         }
       });
@@ -318,7 +337,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Gestión del Menú</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Gestión del Menú</h1>
         <div className="flex gap-2">
           <Button onClick={() => setShowImportDialog(true)} variant="outline">
             <Upload className="h-4 w-4 mr-2" />

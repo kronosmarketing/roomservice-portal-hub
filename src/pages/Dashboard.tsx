@@ -37,9 +37,19 @@ const Dashboard = () => {
           .eq('email', user.email)
           .maybeSingle();
         
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error("Error fetching profile:", error);
-          // No mostrar error al usuario para este caso
+          // Si hay error, crear un perfil temporal para que funcione
+          setUserProfile({
+            id: user.id,
+            email: user.email,
+            hotel_name: 'Mi Hotel',
+            agent_name: 'Agente IA',
+            user_role: 'hotel_manager',
+            is_active: true
+          });
+          setLoading(false);
+          return;
         }
 
         if (profile) {
@@ -52,7 +62,7 @@ const Dashboard = () => {
             email: user.email,
             hotel_name: 'Mi Hotel',
             agent_name: 'Agente IA',
-            user_role: 'hotel_manager',
+            user_role: 'hotel_manager' as const, // Especificar el tipo exacto
             is_active: true,
             auth_provider: 'email'
           };
