@@ -29,16 +29,27 @@ const Dashboard = () => {
       console.log("✅ Usuario autenticado:", user.email);
       setUser(user);
       
-      // Buscar perfil del usuario
+      // Buscar perfil del usuario en la tabla correcta
       const { data: profile, error } = await supabase
         .from('hotel_user_settings')
         .select('*')
         .eq('email', user.email)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error("❌ Error obteniendo perfil:", error);
+        toast({
+          title: "Error",
+          description: "Error obteniendo perfil de usuario: " + error.message,
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!profile) {
+        console.log("🔄 Perfil no encontrado, creando uno nuevo...");
         // Crear perfil básico si no existe
         const { data: newProfile, error: insertError } = await supabase
           .from('hotel_user_settings')
@@ -57,10 +68,9 @@ const Dashboard = () => {
           console.error("❌ Error creando perfil:", insertError);
           toast({
             title: "Error",
-            description: "Error configurando el perfil de usuario",
+            description: "Error creando perfil de usuario: " + insertError.message,
             variant: "destructive",
           });
-          return;
         } else {
           console.log("✅ Perfil creado exitosamente");
           setUserProfile(newProfile);
