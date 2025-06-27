@@ -26,13 +26,6 @@ const EnhancedOrdersLoader = ({
     loadOrders();
   }, [hotelId]);
 
-  const showGenericError = (operation: string) => {
-    toast({
-      title: "Información",
-      description: `No se pudo completar la operación: ${operation}`,
-    });
-  };
-
   const loadOrders = async () => {
     try {
       onLoadingChange(true);
@@ -41,7 +34,6 @@ const EnhancedOrdersLoader = ({
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
         console.error('Error de autenticación:', authError);
-        showGenericError('verificación de autenticación');
         return;
       }
 
@@ -55,7 +47,6 @@ const EnhancedOrdersLoader = ({
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
-        showGenericError('carga de pedidos');
         return;
       }
 
@@ -111,7 +102,6 @@ const EnhancedOrdersLoader = ({
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
-      showGenericError('carga de datos');
     } finally {
       onLoadingChange(false);
     }

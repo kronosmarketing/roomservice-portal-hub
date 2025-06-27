@@ -39,15 +39,11 @@ const Dashboard = () => {
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching profile:", error);
           
-          // Si no existe el perfil, intentar crearlo
+          // Si no existe el perfil, las políticas RLS lo crearán automáticamente
           if (error.code === 'PGRST116' || error.message?.includes('No rows found')) {
-            console.log("No profile found, this should have been created automatically");
-            toast({
-              title: "Información",
-              description: "Configurando tu perfil de usuario...",
-            });
+            console.log("Profile will be created automatically by RLS policies");
             
-            // Intentar crear el perfil manualmente
+            // Intentar crear el perfil manualmente si es necesario
             const newProfileData = {
               email: user.email,
               hotel_name: 'Mi Hotel',
@@ -65,17 +61,10 @@ const Dashboard = () => {
             
             if (insertError) {
               console.error("Error creating profile:", insertError);
-              toast({
-                title: "Error",
-                description: "No se pudo configurar el perfil de usuario",
-                variant: "destructive",
-              });
             } else {
               console.log("New profile created:", newProfile);
               setUserProfile(newProfile);
             }
-          } else {
-            throw error;
           }
         } else if (profile) {
           console.log("Profile found:", profile);
@@ -83,10 +72,6 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error("Unexpected error:", error);
-        toast({
-          title: "Información",
-          description: "Error al cargar el perfil de usuario",
-        });
       }
       
       setLoading(false);

@@ -50,10 +50,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
-        toast({
-          title: "Información",
-          description: "No se encontraron pedidos para mostrar",
-        });
         onOrdersLoaded([]);
         onDayStatsLoaded({
           totalFinalizados: 0,
@@ -123,10 +119,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
-      toast({
-        title: "Información",
-        description: "Error general al cargar los datos",
-      });
       onOrdersLoaded([]);
       onDayStatsLoaded({
         totalFinalizados: 0,
