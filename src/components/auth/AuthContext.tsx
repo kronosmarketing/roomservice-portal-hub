@@ -2,8 +2,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { auditSession } from '@/components/dashboard/orders/security/authValidation';
-import { logSecurityEvent } from '@/components/dashboard/orders/security/securityLogging';
 
 interface AuthContextType {
   user: User | null;
@@ -34,40 +32,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener with enhanced security
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔄 Auth state change:', event, session?.user?.email);
-        
-        if (session?.user) {
-          // Perform session integrity check for authenticated users
-          try {
-            const isValid = await auditSession();
-            if (!isValid) {
-              console.warn('⚠️ Session integrity check failed');
-              await logSecurityEvent('invalid_session_detected', 'auth', null);
-              await supabase.auth.signOut();
-              setSession(null);
-              setUser(null);
-              setLoading(false);
-              return;
-            }
-          } catch (error) {
-            console.error('❌ Session audit failed:', error);
-          }
-          
-          console.log('✅ Usuario autenticado:', session.user.email);
-        }
-        
+      (event, session) => {
+        console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
 
-    // Check for existing session
+    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔍 Checking existing session:', session?.user?.email || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -76,29 +52,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Periodic session integrity check
-  useEffect(() => {
-    if (!user) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const isValid = await auditSession();
-        if (!isValid) {
-          console.warn('⚠️ Periodic session check failed - signing out');
-          await signOut();
-        }
-      } catch (error) {
-        console.error('❌ Periodic session check error:', error);
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
-
-    return () => clearInterval(interval);
-  }, [user]);
-
   const signUp = async (email: string, password: string, userData?: any) => {
     try {
-      await logSecurityEvent('signup_attempt', 'auth', null, { email });
-      
+      // CRITICAL: Always set emailRedirectTo to prevent authentication issues
       const redirectUrl = `${window.location.origin}/dashboard`;
       
       const { error } = await supabase.auth.signUp({
@@ -110,55 +66,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       });
 
-      if (error) {
-        await logSecurityEvent('signup_failed', 'auth', null, { email, error: error.message });
-        throw error;
-      }
+      if (error) throw error;
 
-      await logSecurityEvent('signup_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
-      console.error('❌ Sign up error:', error);
+      console.error('Sign up error:', error);
       return { error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('🔄 Attempting sign in for:', email);
-      await logSecurityEvent('signin_attempt', 'auth', null, { email });
-      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (error) {
-        console.error('❌ Sign in failed:', error);
-        await logSecurityEvent('signin_failed', 'auth', null, { email, error: error.message });
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('✅ Sign in successful for:', email);
-      await logSecurityEvent('signin_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
-      console.error('❌ Sign in error:', error);
+      console.error('Sign in error:', error);
       return { error };
     }
   };
 
   const signOut = async () => {
     try {
-      await logSecurityEvent('signout_attempt', 'auth', null);
-      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      await logSecurityEvent('signout_success', 'auth', null);
       return { error: null };
     } catch (error: any) {
-      console.error('❌ Sign out error:', error);
+      console.error('Sign out error:', error);
       return { error };
     }
   };

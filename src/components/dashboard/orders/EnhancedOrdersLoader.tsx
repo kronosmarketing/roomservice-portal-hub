@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Order, DayStats } from "./types";
 import { formatOrderFromDatabase } from "./orderUtils";
+import { validateUserHotelAccess, logSecurityEvent, verifyAuthentication } from "./securityUtils";
 
 interface EnhancedOrdersLoaderProps {
   hotelId: string;
@@ -21,34 +22,51 @@ const EnhancedOrdersLoader = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!hotelId) {
-      console.log("⚠️ No hay hotelId disponible");
-      return;
-    }
+    if (!hotelId) return;
     
     loadOrders();
   }, [hotelId]);
 
+  const showGenericError = (operation: string) => {
+    toast({
+      title: "Error",
+      description: `No se pudo completar la operación: ${operation}`,
+      variant: "destructive"
+    });
+  };
+
   const loadOrders = async () => {
     try {
       onLoadingChange(true);
-      console.log('🔄 Cargando pedidos para hotel:', hotelId);
       
-      // Cargar pedidos
+      // Verificar autenticación primero
+      const isAuthenticated = await verifyAuthentication();
+      if (!isAuthenticated) {
+        await logSecurityEvent('unauthenticated_orders_access_attempt', 'orders', hotelId);
+        showGenericError('verificación de autenticación');
+        return;
+      }
+
+      // Validar acceso al hotel
+      const hasAccess = await validateUserHotelAccess(hotelId);
+      if (!hasAccess) {
+        await logSecurityEvent('unauthorized_orders_access_attempt', 'orders', hotelId);
+        showGenericError('verificación de permisos');
+        return;
+      }
+
+      await logSecurityEvent('orders_load_initiated', 'orders', hotelId);
+
+      // Cargar pedidos usando RLS (las políticas ya filtran automáticamente)
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('hotel_id', hotelId)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
-        console.error('❌ Error cargando pedidos:', ordersError);
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los pedidos",
-          variant: "destructive"
-        });
-        onOrdersLoaded([]);
+        console.error('Error cargando pedidos:', ordersError);
+        await logSecurityEvent('orders_load_error', 'orders', hotelId, { error: ordersError.message });
+        showGenericError('carga de pedidos');
         return;
       }
 
@@ -58,7 +76,8 @@ const EnhancedOrdersLoader = ({
         // Cargar items para cada pedido
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
-            const { data: orderItems } = await supabase
+            // Los items también están protegidos por RLS
+            const { data: orderItems, error: itemsError } = await supabase
               .from('order_items')
               .select(`
                 id,
@@ -75,6 +94,11 @@ const EnhancedOrdersLoader = ({
               `)
               .eq('order_id', order.id);
             
+            if (itemsError) {
+              console.error(`Error cargando items para pedido ${order.id}:`, itemsError);
+              return formatOrderFromDatabase(order, []);
+            }
+            
             const validItems = orderItems?.filter(item => 
               item.menu_items && 
               typeof item.menu_items === 'object' && 
@@ -86,28 +110,53 @@ const EnhancedOrdersLoader = ({
         );
         
         const validOrders = ordersWithItems.filter(order => 
-          order.items && order.items.trim() !== '' && order.items !== 'Sin items disponibles'
+          order.items && order.items.trim() !== ''
         );
         
-        console.log('✅ Pedidos válidos:', validOrders.length);
+        await logSecurityEvent('orders_loaded_successfully', 'orders', hotelId, { 
+          count: validOrders.length 
+        });
+        
         onOrdersLoaded(validOrders);
       } else {
-        console.log('📭 No hay pedidos para este hotel');
         onOrdersLoaded([]);
       }
 
       // Cargar estadísticas del día
+      await loadDayStatistics(hotelId);
+
+    } catch (error) {
+      console.error('Error general cargando pedidos:', error);
+      await logSecurityEvent('orders_load_exception', 'orders', hotelId, { 
+        error: String(error) 
+      });
+      showGenericError('carga de datos');
+    } finally {
+      onLoadingChange(false);
+    }
+  };
+
+  const loadDayStatistics = async (hotelId: string) => {
+    try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const { data: todayOrders } = await supabase
+      const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
-        .eq('hotel_id', hotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
+
+      if (statsError) {
+        console.error('Error cargando estadísticas:', statsError);
+        await logSecurityEvent('stats_load_error', 'orders', hotelId, { 
+          error: statsError.message 
+        });
+        // No mostrar error al usuario para estadísticas
+        return;
+      }
 
       const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
       const stats: DayStats = {
@@ -118,17 +167,11 @@ const EnhancedOrdersLoader = ({
       };
 
       onDayStatsLoaded(stats);
-
     } catch (error) {
-      console.error('❌ Error general:', error);
-      toast({
-        title: "Error",
-        description: "Error cargando datos del dashboard",
-        variant: "destructive"
+      console.error('Error cargando estadísticas:', error);
+      await logSecurityEvent('stats_load_exception', 'orders', hotelId, { 
+        error: String(error) 
       });
-      onOrdersLoaded([]);
-    } finally {
-      onLoadingChange(false);
     }
   };
 

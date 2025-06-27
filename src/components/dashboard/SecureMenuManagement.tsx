@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -392,8 +393,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   validateAmount,
                 } = validationUtils;
 
-                // Await the async validation functions
-                const nameValidation = await validateAndSanitizeText(formData.name, 100);
+                const nameValidation = validateAndSanitizeText(formData.name, 100);
                 if (!nameValidation.isValid) {
                   toast({
                     title: "Error",
@@ -403,9 +403,9 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   return;
                 }
 
-                const descriptionValidation = await validateAndSanitizeText(formData.description, 500);
+                const descriptionValidation = validateAndSanitizeText(formData.description, 500);
 
-                const priceValidation = await validateAmount(parseFloat(formData.price));
+                const priceValidation = validateAmount(parseFloat(formData.price));
                 if (!priceValidation.isValid) {
                   toast({
                     title: "Error",
@@ -422,9 +422,9 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                     .filter(allergen => allergen.length > 0);
 
                   const menuItemData = {
-                    name: nameValidation.sanitizedValue!,
+                    name: nameValidation.sanitizedValue,
                     description: descriptionValidation.sanitizedValue,
-                    price: parseFloat(priceValidation.sanitizedValue!),
+                    price: parseFloat(priceValidation.sanitizedValue),
                     category_id: formData.category_id || null,
                     preparation_time: parseInt(formData.preparation_time) || 0,
                     ingredients: formData.ingredients,
@@ -455,7 +455,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                       title: "Éxito",
                       description: "Elemento creado correctamente"
                     });
-                    await logSecurityEvent('menu_item_created', 'menu_items', nameValidation.sanitizedValue!);
+                    await logSecurityEvent('menu_item_created', 'menu_items', menuItemData.name);
                   }
 
                   setShowDialog(false);
@@ -472,7 +472,7 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   await loadMenuItems();
                 } catch (error) {
                   console.error('Error saving menu item:', error);
-                  await logSecurityEvent('menu_item_save_error', 'menu_items', nameValidation.sanitizedValue!, { error: String(error) });
+                  await logSecurityEvent('menu_item_save_error', 'menu_items', nameValidation.sanitizedValue, { error: String(error) });
                   toast({
                     title: "Error",
                     description: "No se pudo guardar el elemento",

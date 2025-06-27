@@ -1,37 +1,44 @@
 
-import React, { useEffect, ReactNode } from 'react';
-import { logSecurityEvent } from './security/securityLogging';
+import { useEffect } from "react";
+import { logSecurityEvent, verifyAuthentication } from "./securityUtils";
 
 interface SecurityAuditLoggerProps {
   hotelId: string;
   component: string;
-  action: string;
+  action?: string;
   details?: any;
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 const SecurityAuditLogger = ({ 
   hotelId, 
   component, 
-  action, 
-  details, 
+  action = 'component_accessed',
+  details,
   children 
 }: SecurityAuditLoggerProps) => {
+
   useEffect(() => {
-    const logComponentAccess = async () => {
-      try {
+    const logAccess = async () => {
+      const isAuthenticated = await verifyAuthentication();
+      
+      if (isAuthenticated) {
         await logSecurityEvent(action, component, hotelId, {
           timestamp: new Date().toISOString(),
-          component,
+          userAgent: navigator.userAgent,
           ...details
         });
-      } catch (error) {
-        console.error('Failed to log security event:', error);
+      } else {
+        await logSecurityEvent('unauthenticated_access_attempt', component, hotelId, {
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          ...details
+        });
       }
     };
 
-    logComponentAccess();
-  }, [hotelId, component, action, details]);
+    logAccess();
+  }, [hotelId, component, action]);
 
   return <>{children}</>;
 };
