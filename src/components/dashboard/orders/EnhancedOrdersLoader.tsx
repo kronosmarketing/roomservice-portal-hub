@@ -114,7 +114,7 @@ const EnhancedOrdersLoader = ({
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // RLS se encarga del filtrado automáticamente
+      // Cargar pedidos del día para estadísticas
       const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
@@ -126,14 +126,27 @@ const EnhancedOrdersLoader = ({
         return;
       }
 
+      // Cargar información de elementos del menú
+      const { data: menuItems, error: menuError } = await supabase
+        .from('menu_items')
+        .select('available');
+
+      if (menuError) {
+        console.error('Error cargando elementos del menú:', menuError);
+      }
+
       const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
+      const availableItems = menuItems?.filter(item => item.available) || [];
+      const totalItems = menuItems?.length || 0;
+
       const stats: DayStats = {
         totalFinalizados: completedOrders.length,
         ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
-        platosDisponibles: 0,
-        totalPlatos: 0
+        platosDisponibles: availableItems.length,
+        totalPlatos: totalItems
       };
 
+      console.log('📊 Estadísticas calculadas:', stats);
       onDayStatsLoaded(stats);
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
