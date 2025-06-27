@@ -39,7 +39,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [userHotelId, setUserHotelId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -69,40 +68,29 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
       console.log('Usuario autenticado:', user.email);
 
-      // Obtener el hotel_id del usuario actual
-      const { data: userProfile, error: profileError } = await supabase
-        .from('hotel_user_settings')
-        .select('id')
-        .eq('email', user.email)
-        .single();
-
-      if (profileError || !userProfile) {
-        console.error('Error obteniendo perfil de usuario:', profileError);
-        setLoading(false);
-        return;
-      }
-
-      console.log('Hotel ID del usuario:', userProfile.id);
-      setUserHotelId(userProfile.id);
-
-      await loadMenuItems(userProfile.id);
-      await loadCategories(userProfile.id);
+      await loadMenuItems();
+      await loadCategories();
     } catch (error) {
       console.error('Error inicializando gestión de menú:', error);
       setLoading(false);
     }
   };
 
-  const loadMenuItems = async (currentUserHotelId: string) => {
+  const loadMenuItems = async () => {
     try {
+      // Usar RLS - automáticamente filtra por hotel del usuario autenticado
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('hotel_id', currentUserHotelId)
         .order('name');
 
       if (error) {
         console.error('Error loading menu items:', error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los elementos del menú",
+          variant: "destructive"
+        });
         setMenuItems([]);
       } else {
         console.log('📋 Items del menú encontrados:', data?.length || 0);
@@ -116,17 +104,16 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     }
   };
 
-  const loadCategories = async (currentUserHotelId: string) => {
+  const loadCategories = async () => {
     try {
+      // Usar RLS - automáticamente filtra por hotel del usuario autenticado
       const { data, error } = await supabase
         .from('menu_categories')
         .select('*')
-        .eq('hotel_id', currentUserHotelId)
         .order('name');
 
       if (error) {
         console.error('Error loading categories:', error);
-        setCategories([]);
       } else {
         setCategories(data || []);
       }
@@ -141,8 +128,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .update({ available: !currentAvailability })
-        .eq('id', itemId)
-        .eq('hotel_id', userHotelId);
+        .eq('id', itemId);
 
       if (error) throw error;
       
@@ -150,9 +136,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         title: "Éxito",
         description: `Elemento ${!currentAvailability ? 'activado' : 'desactivado'} correctamente`
       });
-      if (userHotelId) {
-        await loadMenuItems(userHotelId);
-      }
+      await loadMenuItems();
     } catch (error) {
       console.error('Error updating availability:', error);
       toast({
@@ -166,15 +150,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!userHotelId) {
-      toast({
-        title: "Error",
-        description: "No se pudo obtener información del hotel",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       const allergensList = formData.allergens
         .split(',')
@@ -189,7 +164,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         preparation_time: parseInt(formData.preparation_time) || 0,
         ingredients: sanitizeInput(formData.ingredients),
         allergens: allergensList,
-        hotel_id: userHotelId,
+        hotel_id: hotelId, // RLS se encargará de validar que coincida con el usuario
         available: true
       };
 
@@ -197,8 +172,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         const { error } = await supabase
           .from('menu_items')
           .update(itemData)
-          .eq('id', editingItem.id)
-          .eq('hotel_id', userHotelId);
+          .eq('id', editingItem.id);
 
         if (error) throw error;
         toast({
@@ -228,9 +202,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         ingredients: "",
         allergens: ""
       });
-      if (userHotelId) {
-        await loadMenuItems(userHotelId);
-      }
+      await loadMenuItems();
     } catch (error) {
       console.error('Error saving menu item:', error);
       toast({
@@ -262,8 +234,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .delete()
-        .eq('id', id)
-        .eq('hotel_id', userHotelId);
+        .eq('id', id);
 
       if (error) throw error;
       
@@ -271,9 +242,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         title: "Éxito",
         description: "Elemento eliminado correctamente"
       });
-      if (userHotelId) {
-        await loadMenuItems(userHotelId);
-      }
+      await loadMenuItems();
     } catch (error) {
       console.error('Error deleting menu item:', error);
       toast({
@@ -294,24 +263,15 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       return;
     }
 
-    if (!userHotelId) {
-      toast({
-        title: "Error",
-        description: "No se pudo obtener información del hotel",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsUploading(true);
     
     try {
-      const securePayload = createSecureWebhookPayload(selectedFile, userHotelId);
+      const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
       
       const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
         headers: {
-          'X-Hotel-ID': userHotelId,
+          'X-Hotel-ID': hotelId,
           'X-Timestamp': new Date().toISOString()
         }
       });
@@ -327,9 +287,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       setShowImportDialog(false);
       setSelectedFile(null);
       setTimeout(() => {
-        if (userHotelId) {
-          loadMenuItems(userHotelId);
-        }
+        loadMenuItems();
       }, 2000);
       
     } catch (error: any) {

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Order, DayStats } from "./types";
 import { formatOrderFromDatabase } from "./orderUtils";
-import { validateUserHotelAccess, logSecurityEvent, verifyAuthentication } from "./securityUtils";
+import { logSecurityEvent } from "./securityUtils";
 
 interface EnhancedOrdersLoaderProps {
   hotelId: string;
@@ -49,33 +49,17 @@ const EnhancedOrdersLoader = ({
 
       console.log('Usuario autenticado:', user.email);
 
-      // Obtener el hotel_id del usuario actual
-      const { data: userProfile, error: profileError } = await supabase
-        .from('hotel_user_settings')
-        .select('id')
-        .eq('email', user.email)
-        .single();
+      await logSecurityEvent('orders_load_initiated', 'orders', hotelId);
 
-      if (profileError || !userProfile) {
-        console.error('Error obteniendo perfil de usuario:', profileError);
-        showGenericError('obtención de perfil');
-        return;
-      }
-
-      console.log('Hotel ID del usuario:', userProfile.id);
-
-      await logSecurityEvent('orders_load_initiated', 'orders', userProfile.id);
-
-      // Cargar pedidos del hotel del usuario
+      // Cargar pedidos usando RLS - automáticamente filtra por hotel del usuario
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('hotel_id', userProfile.id)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
-        await logSecurityEvent('orders_load_error', 'orders', userProfile.id, { error: ordersError.message });
+        await logSecurityEvent('orders_load_error', 'orders', hotelId, { error: ordersError.message });
         showGenericError('carga de pedidos');
         return;
       }
@@ -122,7 +106,7 @@ const EnhancedOrdersLoader = ({
           order.items && order.items.trim() !== ''
         );
         
-        await logSecurityEvent('orders_loaded_successfully', 'orders', userProfile.id, { 
+        await logSecurityEvent('orders_loaded_successfully', 'orders', hotelId, { 
           count: validOrders.length 
         });
         
@@ -131,8 +115,8 @@ const EnhancedOrdersLoader = ({
         onOrdersLoaded([]);
       }
 
-      // Cargar estadísticas del día
-      await loadDayStatistics(userProfile.id);
+      // Cargar estadísticas del día usando RLS
+      await loadDayStatistics();
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
@@ -145,23 +129,23 @@ const EnhancedOrdersLoader = ({
     }
   };
 
-  const loadDayStatistics = async (userHotelId: string) => {
+  const loadDayStatistics = async () => {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      // Usar RLS - automáticamente filtra por hotel del usuario
       const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
-        .eq('hotel_id', userHotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
       if (statsError) {
         console.error('Error cargando estadísticas:', statsError);
-        await logSecurityEvent('stats_load_error', 'orders', userHotelId, { 
+        await logSecurityEvent('stats_load_error', 'orders', hotelId, { 
           error: statsError.message 
         });
         return;

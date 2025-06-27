@@ -24,7 +24,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
   const loadOrders = async () => {
     try {
       onLoadingChange(true);
-      console.log('🔄 Cargando pedidos...');
+      console.log('🔄 Cargando pedidos para hotel:', hotelId);
 
       // Verificar autenticación
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -42,36 +42,19 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       console.log('Usuario autenticado:', user.email);
 
-      // Obtener el hotel_id del usuario actual
-      const { data: userProfile, error: profileError } = await supabase
-        .from('hotel_user_settings')
-        .select('id')
-        .eq('email', user.email)
-        .single();
-
-      if (profileError || !userProfile) {
-        console.error('Error obteniendo perfil de usuario:', profileError);
-        onOrdersLoaded([]);
-        onDayStatsLoaded({
-          totalFinalizados: 0,
-          ventasDelDia: 0,
-          platosDisponibles: 0,
-          totalPlatos: 0
-        });
-        return;
-      }
-
-      console.log('Hotel ID del usuario:', userProfile.id);
-
-      // Cargar pedidos del hotel del usuario
+      // Cargar pedidos - ahora usando RLS, automáticamente filtra por hotel del usuario
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('hotel_id', userProfile.id)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los pedidos",
+          variant: "destructive"
+        });
         onOrdersLoaded([]);
         onDayStatsLoaded({
           totalFinalizados: 0,
@@ -146,7 +129,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         const { data: todayOrders, error: statsError } = await supabase
           .from('orders')
           .select('total, status')
-          .eq('hotel_id', userProfile.id)
           .gte('created_at', today.toISOString())
           .lt('created_at', tomorrow.toISOString());
 
@@ -175,6 +157,11 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
+      toast({
+        title: "Error",
+        description: "Error general al cargar los datos",
+        variant: "destructive"
+      });
       onOrdersLoaded([]);
       onDayStatsLoaded({
         totalFinalizados: 0,

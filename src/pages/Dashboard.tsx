@@ -30,43 +30,19 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil usando la nueva función RLS simplificada
+        // Buscar perfil del usuario
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
           .eq('email', user.email)
-          .maybeSingle();
+          .single();
         
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error("Error fetching profile:", error);
-          // Crear perfil si no existe
-          const newProfileData = {
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
-            user_role: 'hotel_manager' as const,
-            is_active: true,
-            auth_provider: 'email'
-          };
+          throw error;
+        }
 
-          const { data: newProfile, error: insertError } = await supabase
-            .from('hotel_user_settings')
-            .insert(newProfileData)
-            .select()
-            .single();
-          
-          if (insertError) {
-            console.error("Error creating profile:", insertError);
-            toast({
-              title: "Error",
-              description: "No se pudo crear el perfil de usuario",
-              variant: "destructive",
-            });
-          } else {
-            console.log("New profile created:", newProfile);
-            setUserProfile(newProfile);
-          }
-        } else if (profile) {
+        if (profile) {
           console.log("Profile found:", profile);
           setUserProfile(profile);
         } else {
@@ -75,7 +51,7 @@ const Dashboard = () => {
           const newProfileData = {
             email: user.email,
             hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
+            agent_name: user.email?.split('@')[0] || 'Agente IA',
             user_role: 'hotel_manager' as const,
             is_active: true,
             auth_provider: 'email'
