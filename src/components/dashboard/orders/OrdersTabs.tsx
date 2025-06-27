@@ -39,8 +39,8 @@ const OrderStatusButton = ({ order, onStatusChange }: { order: Order; onStatusCh
   };
 
   const statusLabels = {
-    'pendiente': 'Marcar como Preparando',
-    'preparando': 'Marcar como Completado',
+    'pendiente': 'Preparando',
+    'preparando': 'Completado',
     'completado': 'Completado'
   };
 
@@ -193,16 +193,16 @@ const OrderCard = ({
           </div>
         )}
         
-        <div className={`flex ${isMobile ? 'flex-col gap-2' : 'justify-between items-center'}`}>
-          <div className={`flex gap-2 ${isMobile ? 'flex-wrap' : ''}`}>
+        <div className={`flex ${isMobile ? 'flex-row gap-2 items-center justify-start' : 'justify-between items-center'}`}>
+          <div className={`flex gap-2 ${isMobile ? 'flex-row items-center' : ''}`}>
             {(showAllActions || order.status !== 'completado') && (
               <OrderStatusButton order={order} onStatusChange={onStatusChange} />
             )}
             <Button
               size="sm"
-              variant="outline"
+              variant="outline" 
               onClick={() => onPrintOrder(order)}
-              className="flex items-center gap-1 p-2"
+              className="flex items-center gap-1 p-2 flex-shrink-0"
             >
               <Printer className="h-4 w-4" />
               {!isMobile && "Imprimir"}
@@ -212,7 +212,7 @@ const OrderCard = ({
                 size="sm"
                 variant="destructive"
                 onClick={() => onCancelOrder(order.id)}
-                className="flex items-center gap-1 p-2"
+                className="flex items-center gap-1 p-2 flex-shrink-0"
               >
                 <X className="h-4 w-4" />
                 {!isMobile && "Cancelar"}

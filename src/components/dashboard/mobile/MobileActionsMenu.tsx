@@ -86,26 +86,26 @@ const MobileActionsMenu = ({
       <DropdownMenuContent className="w-56 bg-white z-50">
         <DropdownMenuItem onClick={onShowReports} className="cursor-pointer">
           <FileText className="h-4 w-4 mr-2" />
-          Ver Informes
+          Informes
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onPrintDailyReport} className="cursor-pointer">
           <Printer className="h-4 w-4 mr-2" />
-          Informe X (Parcial)
+          Informe X
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onShowDayClosure} className="cursor-pointer">
           <DoorClosed className="h-4 w-4 mr-2" />
-          Cierre Z (Final)
+          Cierre Z
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onShowSearch} className="cursor-pointer">
           <Search className="h-4 w-4 mr-2" />
-          Buscar Pedidos
+          Buscar
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onShowDeleteDialog} className="cursor-pointer text-red-600">
           <Trash2 className="h-4 w-4 mr-2" />
-          Eliminar Pedido
+          Eliminar
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
