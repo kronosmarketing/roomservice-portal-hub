@@ -30,11 +30,10 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil del usuario - ahora funciona con RLS simplificado
+        // Buscar perfil del usuario con la nueva estructura
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
-          .eq('email', user.email)
           .single();
         
         if (error && error.code !== 'PGRST116') {

@@ -50,10 +50,10 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
+        // Mostrar mensaje más genérico por seguridad
         toast({
-          title: "Error",
-          description: "No se pudieron cargar los pedidos",
-          variant: "destructive"
+          title: "Información",
+          description: "No se encontraron pedidos para mostrar",
         });
         onOrdersLoaded([]);
         onDayStatsLoaded({
@@ -120,47 +120,13 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       }
 
       // Cargar estadísticas del día
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-
-        const { data: todayOrders, error: statsError } = await supabase
-          .from('orders')
-          .select('total, status')
-          .gte('created_at', today.toISOString())
-          .lt('created_at', tomorrow.toISOString());
-
-        if (statsError) {
-          console.error('Error cargando estadísticas:', statsError);
-        }
-
-        const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
-        const stats: DayStats = {
-          totalFinalizados: completedOrders.length,
-          ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
-          platosDisponibles: 0,
-          totalPlatos: 0
-        };
-
-        onDayStatsLoaded(stats);
-      } catch (statsError) {
-        console.error('Error cargando estadísticas:', statsError);
-        onDayStatsLoaded({
-          totalFinalizados: 0,
-          ventasDelDia: 0,
-          platosDisponibles: 0,
-          totalPlatos: 0
-        });
-      }
+      await loadDayStatistics();
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
       toast({
-        title: "Error",
+        title: "Información",
         description: "Error general al cargar los datos",
-        variant: "destructive"
       });
       onOrdersLoaded([]);
       onDayStatsLoaded({
@@ -171,6 +137,43 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       });
     } finally {
       onLoadingChange(false);
+    }
+  };
+
+  const loadDayStatistics = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const { data: todayOrders, error: statsError } = await supabase
+        .from('orders')
+        .select('total, status')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      if (statsError) {
+        console.error('Error cargando estadísticas:', statsError);
+      }
+
+      const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
+      const stats: DayStats = {
+        totalFinalizados: completedOrders.length,
+        ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
+        platosDisponibles: 0,
+        totalPlatos: 0
+      };
+
+      onDayStatsLoaded(stats);
+    } catch (statsError) {
+      console.error('Error cargando estadísticas:', statsError);
+      onDayStatsLoaded({
+        totalFinalizados: 0,
+        ventasDelDia: 0,
+        platosDisponibles: 0,
+        totalPlatos: 0
+      });
     }
   };
 

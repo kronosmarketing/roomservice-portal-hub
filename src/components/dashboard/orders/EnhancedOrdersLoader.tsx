@@ -28,9 +28,8 @@ const EnhancedOrdersLoader = ({
 
   const showGenericError = (operation: string) => {
     toast({
-      title: "Error",
+      title: "Información",
       description: `No se pudo completar la operación: ${operation}`,
-      variant: "destructive"
     });
   };
 
