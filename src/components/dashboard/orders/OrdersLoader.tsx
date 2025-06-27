@@ -42,7 +42,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       console.log('Usuario autenticado:', user.email);
 
-      // Cargar pedidos - ahora usando RLS, automáticamente filtra por hotel del usuario
+      // Cargar pedidos - RLS se encarga del filtrado automáticamente
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')

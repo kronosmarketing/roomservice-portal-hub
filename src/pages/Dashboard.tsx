@@ -30,7 +30,7 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil del usuario
+        // Buscar perfil del usuario - ahora funciona con RLS simplificado
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
@@ -39,41 +39,42 @@ const Dashboard = () => {
         
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching profile:", error);
-          throw error;
-        }
+          
+          // Si no existe el perfil, crear uno nuevo
+          if (error.code === 'PGRST116' || error.message?.includes('No rows found')) {
+            console.log("No profile found, creating new one");
+            const newProfileData = {
+              email: user.email,
+              hotel_name: 'Mi Hotel',
+              agent_name: user.email?.split('@')[0] || 'Agente IA',
+              user_role: 'hotel_manager' as const,
+              is_active: true,
+              auth_provider: 'email'
+            };
 
-        if (profile) {
+            const { data: newProfile, error: insertError } = await supabase
+              .from('hotel_user_settings')
+              .insert(newProfileData)
+              .select()
+              .single();
+            
+            if (insertError) {
+              console.error("Error creating profile:", insertError);
+              toast({
+                title: "Error",
+                description: "No se pudo crear el perfil de usuario",
+                variant: "destructive",
+              });
+            } else {
+              console.log("New profile created:", newProfile);
+              setUserProfile(newProfile);
+            }
+          } else {
+            throw error;
+          }
+        } else if (profile) {
           console.log("Profile found:", profile);
           setUserProfile(profile);
-        } else {
-          // Crear perfil si no existe
-          console.log("No profile found, creating new one");
-          const newProfileData = {
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: user.email?.split('@')[0] || 'Agente IA',
-            user_role: 'hotel_manager' as const,
-            is_active: true,
-            auth_provider: 'email'
-          };
-
-          const { data: newProfile, error: insertError } = await supabase
-            .from('hotel_user_settings')
-            .insert(newProfileData)
-            .select()
-            .single();
-          
-          if (insertError) {
-            console.error("Error creating profile:", insertError);
-            toast({
-              title: "Error",
-              description: "No se pudo crear el perfil de usuario",
-              variant: "destructive",
-            });
-          } else {
-            console.log("New profile created:", newProfile);
-            setUserProfile(newProfile);
-          }
         }
       } catch (error) {
         console.error("Unexpected error:", error);

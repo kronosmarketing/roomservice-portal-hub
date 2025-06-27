@@ -476,6 +476,10 @@ export type Database = {
         Args: { password: string }
         Returns: string
       }
+      get_current_user_email: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_current_user_hotel_id: {
         Args: Record<PropertyKey, never>
         Returns: string
