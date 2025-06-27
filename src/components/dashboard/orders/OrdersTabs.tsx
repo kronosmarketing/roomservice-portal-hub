@@ -104,25 +104,25 @@ const OrderCard = ({
   return (
     <Card className="mb-4">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} mb-1`}>
               Habitación {sanitizeInput(order.roomNumber)}
             </CardTitle>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="space-y-1">
               <div className="flex items-center gap-1">
-                <Hash className="h-3 w-3" />
+                <Hash className="h-3 w-3 text-gray-500 flex-shrink-0" />
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1 cursor-pointer group">
-                        <span className="font-mono text-xs">
+                        <span className="font-mono text-xs truncate">
                           #{order.id.substring(0, 8)}
                         </span>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           onClick={() => copyOrderId(order.id)}
                         >
                           <Copy className="h-3 w-3" />
@@ -135,29 +135,31 @@ const OrderCard = ({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <span>•</span>
-              <span className="text-xs">{formatTime(order.timestamp)}</span>
+              <div className="text-xs text-gray-500">
+                {formatTime(order.timestamp)}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={`${getStatusColor(order.status)} text-xs`}>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-3">
+            <Badge variant="outline" className={`${getStatusColor(order.status)} text-xs whitespace-nowrap`}>
               {getStatusIcon(order.status)}
               {isMobile ? order.status.charAt(0).toUpperCase() : order.status}
             </Badge>
-            <span className={`${isMobile ? 'text-base' : 'text-lg'} font-bold`}>
+            <span className={`${isMobile ? 'text-sm' : 'text-lg'} font-bold text-green-600 whitespace-nowrap`}>
               {formatPrice(order.total)}
             </span>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className={`font-medium ${isMobile ? 'text-sm' : ''}`}>
-                {sanitizeInput(order.items)}
-              </span>
-            </div>
+        <div className="space-y-3 mb-4">
+          <div>
+            <span className={`font-medium ${isMobile ? 'text-sm' : ''}`}>
+              {sanitizeInput(order.items)}
+            </span>
+          </div>
+          <div className="text-xs text-gray-600">
+            Pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
           </div>
         </div>
         
@@ -169,10 +171,7 @@ const OrderCard = ({
           </div>
         )}
         
-        <div className={`flex ${isMobile ? 'flex-col gap-3' : 'justify-between items-center'}`}>
-          <div className="text-sm text-gray-600">
-            Método de pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
-          </div>
+        <div className={`flex ${isMobile ? 'flex-col gap-2' : 'justify-between items-center'}`}>
           <div className={`flex gap-2 ${isMobile ? 'flex-wrap' : ''}`}>
             {(showAllActions || order.status !== 'completado') && (
               <OrderStatusButton order={order} onStatusChange={onStatusChange} />
@@ -181,7 +180,7 @@ const OrderCard = ({
               size="sm"
               variant="outline"
               onClick={() => onPrintOrder(order)}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 p-2"
             >
               <Printer className="h-4 w-4" />
               {!isMobile && "Imprimir"}
@@ -191,7 +190,7 @@ const OrderCard = ({
                 size="sm"
                 variant="destructive"
                 onClick={() => onCancelOrder(order.id)}
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 p-2"
               >
                 <X className="h-4 w-4" />
                 {!isMobile && "Cancelar"}
@@ -730,19 +729,19 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
       <Tabs defaultValue="all" className="w-full">
         <TabsList className={`${isMobile ? 'grid w-full grid-cols-4 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-4'}`}>
-          <TabsTrigger value="all" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+          <TabsTrigger value="all" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Todos</span> ({orders.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+          <TabsTrigger value="pending" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Pend.</span> ({pendingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="preparing" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+          <TabsTrigger value="preparing" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Prep.</span> ({preparingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+          <TabsTrigger value="completed" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Comp.</span> ({completedOrders.length})
           </TabsTrigger>

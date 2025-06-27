@@ -31,7 +31,7 @@ const MobileHeader = ({ hotelName, email, onLogout }: MobileHeaderProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-transparent border-white/30 text-white hover:bg-white/10"
+                  className="bg-transparent border-white/30 text-white hover:bg-white/10 p-2"
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
