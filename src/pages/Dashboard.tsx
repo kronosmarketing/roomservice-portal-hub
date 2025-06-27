@@ -17,28 +17,29 @@ const Dashboard = () => {
 
   useEffect(() => {
     const getUser = async () => {
-      console.log("Getting user data...");
+      console.log("🔄 Obteniendo datos del usuario...");
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        console.log("No user found, redirecting to home");
+        console.log("❌ Usuario no encontrado, redirigiendo...");
         navigate('/');
         return;
       }
 
-      console.log("User found:", user.email);
+      console.log("✅ Usuario autenticado:", user.email);
       setUser(user);
       
-      // Buscar perfil por email en lugar de por ID
+      // Buscar perfil del usuario
       const { data: profile, error } = await supabase
         .from('hotel_user_settings')
         .select('*')
         .eq('email', user.email)
+        .eq('is_active', true)
         .single();
       
       if (error) {
-        console.error("Error fetching profile:", error);
-        // Si no existe el perfil, creamos uno básico
+        console.error("❌ Error obteniendo perfil:", error);
+        // Crear perfil básico si no existe
         const { data: newProfile, error: insertError } = await supabase
           .from('hotel_user_settings')
           .insert({
@@ -53,22 +54,19 @@ const Dashboard = () => {
           .single();
         
         if (insertError) {
-          console.error("Error creating profile:", insertError);
-          // Crear un perfil temporal para que funcione
-          setUserProfile({
-            id: user.id,
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
-            user_role: 'hotel_manager',
-            is_active: true
+          console.error("❌ Error creando perfil:", insertError);
+          toast({
+            title: "Error",
+            description: "Error configurando el perfil de usuario",
+            variant: "destructive",
           });
+          return;
         } else {
-          console.log("New profile created:", newProfile);
+          console.log("✅ Perfil creado exitosamente");
           setUserProfile(newProfile);
         }
       } else {
-        console.log("Profile found:", profile);
+        console.log("✅ Perfil encontrado:", profile.hotel_name);
         setUserProfile(profile);
       }
       
@@ -76,7 +74,7 @@ const Dashboard = () => {
     };
 
     getUser();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -96,22 +94,35 @@ const Dashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700 flex items-center justify-center">
         <div className="text-white text-center">
           <Mic className="h-16 w-16 text-blue-400 bg-blue-400/20 rounded-full p-3 mx-auto mb-4 animate-pulse" />
-          <p>Cargando panel...</p>
+          <p>Cargando panel de control...</p>
         </div>
       </div>
     );
   }
 
-  // Usar el ID del perfil del usuario como hotelId (que corresponde al hotel_user_settings.id)
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-red-700 flex items-center justify-center">
+        <div className="text-white text-center">
+          <h1 className="text-2xl font-bold mb-4">Error de configuración</h1>
+          <p>No se pudo cargar el perfil del usuario</p>
+          <Button onClick={() => navigate('/')} className="mt-4">
+            Volver al inicio
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const dashboardUser = {
-    userRole: userProfile?.user_role || 'hotel_manager',
-    hotelId: userProfile?.id || user?.id || '', // Este es el ID correcto para el hotel
-    hotelName: userProfile?.hotel_name || 'Mi Hotel',
-    agentName: userProfile?.agent_name || 'Agente IA',
-    email: userProfile?.email || user?.email
+    userRole: userProfile.user_role || 'hotel_manager',
+    hotelId: userProfile.id,
+    hotelName: userProfile.hotel_name || 'Mi Hotel',
+    agentName: userProfile.agent_name || 'Agente IA',
+    email: userProfile.email || user?.email || ''
   };
 
-  console.log('🏨 Dashboard User Data:', {
+  console.log('🏨 Datos del dashboard:', {
     hotelId: dashboardUser.hotelId,
     hotelName: dashboardUser.hotelName,
     email: dashboardUser.email
