@@ -138,16 +138,33 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      console.log('🗓️ Cargando estadísticas para:', today.toISOString(), 'hasta', tomorrow.toISOString());
+
+      // Cargar TODOS los pedidos para debug
+      const { data: allOrders, error: allOrdersError } = await supabase
+        .from('orders')
+        .select('id, total, status, created_at');
+
+      if (allOrdersError) {
+        console.error('Error cargando todos los pedidos:', allOrdersError);
+      } else {
+        console.log('🔍 Todos los pedidos en DB:', allOrders?.length || 0);
+        console.log('🔍 Estados de pedidos:', allOrders?.map(o => ({ id: o.id.substring(0, 8), status: o.status, total: o.total })));
+      }
+
       // Cargar pedidos del día para estadísticas
       const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
-        .select('total, status')
+        .select('total, status, created_at')
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
       if (statsError) {
         console.error('Error cargando estadísticas:', statsError);
       }
+
+      console.log('📊 Pedidos del día encontrados:', todayOrders?.length || 0);
+      console.log('📊 Detalle pedidos del día:', todayOrders?.map(o => ({ status: o.status, total: o.total, created_at: o.created_at })));
 
       // Cargar información de elementos del menú
       const { data: menuItems, error: menuError } = await supabase
@@ -158,13 +175,30 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         console.error('Error cargando elementos del menú:', menuError);
       }
 
-      const completedOrders = todayOrders?.filter(o => o.status === 'completado') || [];
+      // Filtrar pedidos completados con diferentes variaciones posibles
+      const completedOrders = todayOrders?.filter(o => 
+        o.status === 'completado' || 
+        o.status === 'completados' || 
+        o.status === 'entregado' ||
+        o.status === 'finalizado'
+      ) || [];
+
+      console.log('✅ Pedidos completados encontrados:', completedOrders.length);
+      console.log('✅ Detalle completados:', completedOrders.map(o => ({ status: o.status, total: o.total })));
+
       const availableItems = menuItems?.filter(item => item.available) || [];
       const totalItems = menuItems?.length || 0;
 
+      // Calcular ventas del día sumando los totales
+      const ventasDelDia = completedOrders.reduce((sum, order) => {
+        const orderTotal = parseFloat(order.total?.toString() || '0');
+        console.log('💰 Sumando pedido:', order.total, 'parseado como:', orderTotal);
+        return sum + orderTotal;
+      }, 0);
+
       const stats: DayStats = {
         totalFinalizados: completedOrders.length,
-        ventasDelDia: completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
+        ventasDelDia: ventasDelDia,
         platosDisponibles: availableItems.length,
         totalPlatos: totalItems
       };
