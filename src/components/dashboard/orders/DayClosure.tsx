@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,32 @@ interface DayClosureProps {
 const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange }: DayClosureProps) => {
   const [loading, setLoading] = useState(false);
   const [closureData, setClosureData] = useState<any>(null);
+  const [hotelName, setHotelName] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    const getHotelName = async () => {
+      if (!hotelId) return;
+      
+      try {
+        const { data: hotelData } = await supabase
+          .from('hotel_user_settings')
+          .select('hotel_name')
+          .eq('id', hotelId)
+          .single();
+
+        if (hotelData) {
+          setHotelName(hotelData.hotel_name);
+        }
+      } catch (error) {
+        console.error('Error obteniendo nombre del hotel:', error);
+      }
+    };
+
+    if (isOpen) {
+      getHotelName();
+    }
+  }, [isOpen, hotelId]);
 
   const printClosureReport = (data: any) => {
     const printWindow = window.open('', '_blank');
@@ -74,6 +99,9 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
           </head>
           <body>
             <div class="center bold">
+              ${hotelName.toUpperCase()}
+            </div>
+            <div class="center bold">
               === CIERRE Z ===
             </div>
             <div class="center">
@@ -102,10 +130,10 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
             <div class="separator"></div>
             
             <div class="bold">DESGLOSE POR PAGO:</div>
-            ${Object.entries(data.metodosResumen).map(([metodo, cantidad]) => `
+            ${Object.entries(data.metodosDetalle).map(([metodo, info]: [string, any]) => `
             <div class="row">
               <span>${metodo.charAt(0).toUpperCase() + metodo.slice(1)}:</span>
-              <span>${cantidad}</span>
+              <span>${info.cantidad} (€${info.total.toFixed(2)})</span>
             </div>
             `).join('')}
             
@@ -131,9 +159,9 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
             <div class="footer">
               Fin del servicio del dia
               <br>
-              Sistema: MarjorAI TPV
-              <br>
               Cierre: ${currentTime}
+              <br><br>
+              <strong>MarjorAI</strong>
             </div>
           </body>
         </html>
@@ -188,13 +216,18 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       const completedOrders = finishedOrders.filter(order => order.status === 'completado');
       const cancelledOrders = finishedOrders.filter(order => order.status === 'cancelado');
 
-      // Calcular totales para el extracto
+      // Calcular totales para el extracto con desglose detallado
       const totalDinero = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
-      const metodosResumen = completedOrders.reduce((acc, order) => {
+      
+      const metodosDetalle = completedOrders.reduce((acc, order) => {
         const metodo = order.payment_method || 'habitacion';
-        acc[metodo] = (acc[metodo] || 0) + 1;
+        if (!acc[metodo]) {
+          acc[metodo] = { cantidad: 0, total: 0 };
+        }
+        acc[metodo].cantidad += 1;
+        acc[metodo].total += parseFloat(order.total.toString());
         return acc;
-      }, {} as Record<string, number>);
+      }, {} as Record<string, { cantidad: number; total: number }>);
 
       // Preparar datos del cierre
       const closureInfo = {
@@ -203,7 +236,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         pedidosCompletados: completedOrders.length,
         pedidosCancelados: cancelledOrders.length,
         totalDinero,
-        metodosResumen,
+        metodosDetalle,
         timestamp: new Date().toLocaleString('es-ES')
       };
 
@@ -345,8 +378,13 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
   const downloadExtract = () => {
     if (!closureData) return;
 
+    const metodosTexto = Object.entries(closureData.metodosDetalle).map(([metodo, info]: [string, any]) => 
+      `• ${metodo.charAt(0).toUpperCase() + metodo.slice(1)}: ${info.cantidad} pedidos (€${info.total.toFixed(2)})`
+    ).join('\n');
+
     const extractContent = `
 CIERRE Z - EXTRACTO FINAL DEL DÍA
+${hotelName.toUpperCase()}
 Fecha: ${closureData.fecha}
 Generado: ${closureData.timestamp}
 
@@ -359,9 +397,7 @@ RESUMEN FINAL DEL DÍA:
 • Total recaudado: €${closureData.totalDinero.toFixed(2)}
 
 DESGLOSE POR MÉTODOS DE PAGO:
-${Object.entries(closureData.metodosResumen).map(([metodo, cantidad]) => 
-  `• ${metodo.charAt(0).toUpperCase() + metodo.slice(1)}: ${cantidad} pedidos`
-).join('\n')}
+${metodosTexto}
 
 ═══════════════════════════════════
 
@@ -369,8 +405,9 @@ ESTADO: CERRADO
 Los pedidos han sido archivados correctamente.
 Fin del servicio del día.
 
-Sistema: MarjorAI TPV
 Cierre realizado: ${closureData.timestamp}
+
+MarjorAI
     `;
 
     const blob = new Blob([extractContent], { type: 'text/plain' });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -230,6 +230,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDayClosure, setShowDayClosure] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [hotelName, setHotelName] = useState('');
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
@@ -237,6 +238,28 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const preparingOrders = orders.filter(order => order.status === 'preparando');
   const completedOrders = orders.filter(order => order.status === 'completado');
   const cancelledOrders = orders.filter(order => order.status === 'cancelado');
+
+  useEffect(() => {
+    const getHotelName = async () => {
+      if (!hotelId) return;
+      
+      try {
+        const { data: hotelData } = await supabase
+          .from('hotel_user_settings')
+          .select('hotel_name')
+          .eq('id', hotelId)
+          .single();
+
+        if (hotelData) {
+          setHotelName(hotelData.hotel_name);
+        }
+      } catch (error) {
+        console.error('Error obteniendo nombre del hotel:', error);
+      }
+    };
+
+    getHotelName();
+  }, [hotelId]);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
@@ -450,9 +473,17 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                   padding-top: 10px;
                   border-top: 2px solid #000;
                 }
+                .footer {
+                  margin-top: 15px;
+                  text-align: center;
+                  font-size: 10px;
+                }
               </style>
             </head>
             <body>
+              <div class="center bold">
+                ${hotelName.toUpperCase()}
+              </div>
               <div class="center bold">
                 === PEDIDO #${order.id.substring(0, 8)} ===
               </div>
@@ -494,8 +525,10 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
               
               <div class="separator"></div>
               
-              <div class="center">
+              <div class="footer">
                 Impreso: ${currentTime}
+                <br><br>
+                <strong>MarjorAI</strong>
               </div>
             </body>
           </html>
@@ -528,6 +561,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       const { data: todayOrders, error } = await supabase
         .from('orders')
         .select('status, payment_method, total')
+        .eq('hotel_id', hotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
@@ -544,6 +578,9 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const tarjetaOrders = completedOrders.filter(o => o.payment_method === 'tarjeta');
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalHabitacion = habitacionOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalEfectivo = efectivoOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalTarjeta = tarjetaOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
         // Imprimir informe X (sin cerrar)
         const printWindow = window.open('', '_blank');
@@ -589,9 +626,17 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                     padding-top: 10px;
                     border-top: 2px solid #000;
                   }
+                  .footer {
+                    margin-top: 15px;
+                    text-align: center;
+                    font-size: 10px;
+                  }
                 </style>
               </head>
               <body>
+                <div class="center bold">
+                  ${hotelName.toUpperCase()}
+                </div>
                 <div class="center bold">
                   === INFORME X ===
                 </div>
@@ -623,15 +668,15 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                 <div class="bold">METODOS DE PAGO:</div>
                 <div class="row">
                   <span>Habitacion:</span>
-                  <span>${habitacionOrders.length}</span>
+                  <span>${habitacionOrders.length} (€${totalHabitacion.toFixed(2)})</span>
                 </div>
                 <div class="row">
                   <span>Efectivo:</span>
-                  <span>${efectivoOrders.length}</span>
+                  <span>${efectivoOrders.length} (€${totalEfectivo.toFixed(2)})</span>
                 </div>
                 <div class="row">
                   <span>Tarjeta:</span>
-                  <span>${tarjetaOrders.length}</span>
+                  <span>${tarjetaOrders.length} (€${totalTarjeta.toFixed(2)})</span>
                 </div>
                 
                 <div class="total-section">
@@ -646,8 +691,10 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
                 <div class="center">
                   INFORME PARCIAL - NO CIERRE
                 </div>
-                <div class="center">
+                <div class="footer">
                   Generado: ${currentTime}
+                  <br><br>
+                  <strong>MarjorAI</strong>
                 </div>
               </body>
             </html>

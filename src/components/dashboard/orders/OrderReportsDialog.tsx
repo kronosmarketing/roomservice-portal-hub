@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,9 @@ interface ReportStats {
   efectivo: number;
   tarjeta: number;
   totalDinero: number;
+  totalHabitacion: number;
+  totalEfectivo: number;
+  totalTarjeta: number;
 }
 
 const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProps) => {
@@ -28,9 +32,13 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
     habitacion: 0,
     efectivo: 0,
     tarjeta: 0,
-    totalDinero: 0
+    totalDinero: 0,
+    totalHabitacion: 0,
+    totalEfectivo: 0,
+    totalTarjeta: 0
   });
   const [loading, setLoading] = useState(false);
+  const [hotelName, setHotelName] = useState('');
   const { toast } = useToast();
 
   const loadReportData = async () => {
@@ -38,6 +46,17 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
     
     setLoading(true);
     try {
+      // Obtener nombre del hotel
+      const { data: hotelData } = await supabase
+        .from('hotel_user_settings')
+        .select('hotel_name')
+        .eq('id', hotelId)
+        .single();
+
+      if (hotelData) {
+        setHotelName(hotelData.hotel_name);
+      }
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -64,6 +83,9 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
         const tarjetaOrders = completedOrders.filter(o => o.payment_method === 'tarjeta');
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalHabitacion = habitacionOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalEfectivo = efectivoOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+        const totalTarjeta = tarjetaOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
         setStats({
           completados: completedOrders.length,
@@ -71,7 +93,10 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
           habitacion: habitacionOrders.length,
           efectivo: efectivoOrders.length,
           tarjeta: tarjetaOrders.length,
-          totalDinero: totalMoney
+          totalDinero: totalMoney,
+          totalHabitacion,
+          totalEfectivo,
+          totalTarjeta
         });
       }
     } catch (error) {
@@ -136,6 +161,9 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
           </head>
           <body>
             <div class="center bold">
+              ${hotelName.toUpperCase()}
+            </div>
+            <div class="center bold">
               === INFORME DIARIO ===
             </div>
             <div class="center">
@@ -159,21 +187,21 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
             <div class="bold">METODOS DE PAGO:</div>
             <div class="row">
               <span>Habitacion:</span>
-              <span>${stats.habitacion}</span>
+              <span>${stats.habitacion} (€${stats.totalHabitacion.toFixed(2)})</span>
             </div>
             <div class="row">
               <span>Efectivo:</span>
-              <span>${stats.efectivo}</span>
+              <span>${stats.efectivo} (€${stats.totalEfectivo.toFixed(2)})</span>
             </div>
             <div class="row">
               <span>Tarjeta:</span>
-              <span>${stats.tarjeta}</span>
+              <span>${stats.tarjeta} (€${stats.totalTarjeta.toFixed(2)})</span>
             </div>
             
             <div class="total-section">
               <div class="row bold">
                 <span>TOTAL DEL DIA:</span>
-                <span>${stats.totalDinero.toFixed(2)}€</span>
+                <span>€${stats.totalDinero.toFixed(2)}</span>
               </div>
             </div>
             
@@ -183,6 +211,8 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
               Gracias por usar nuestro sistema
               <br>
               Generado: ${new Date().toLocaleString('es-ES')}
+              <br><br>
+              <strong>MarjorAI</strong>
             </div>
           </body>
         </html>
@@ -244,15 +274,15 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
                 <CardContent className="space-y-2">
                   <div className="flex justify-between">
                     <span>Habitación:</span>
-                    <span className="font-bold">{stats.habitacion}</span>
+                    <span className="font-bold">{stats.habitacion} (€{stats.totalHabitacion.toFixed(2)})</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Efectivo:</span>
-                    <span className="font-bold">{stats.efectivo}</span>
+                    <span className="font-bold">{stats.efectivo} (€{stats.totalEfectivo.toFixed(2)})</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Tarjeta:</span>
-                    <span className="font-bold">{stats.tarjeta}</span>
+                    <span className="font-bold">{stats.tarjeta} (€{stats.totalTarjeta.toFixed(2)})</span>
                   </div>
                 </CardContent>
               </Card>
