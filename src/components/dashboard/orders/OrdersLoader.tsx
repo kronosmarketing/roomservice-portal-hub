@@ -24,7 +24,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
   const loadOrders = async () => {
     try {
       onLoadingChange(true);
-      console.log('🔄 Cargando pedidos para hotel:', hotelId);
+      console.log('🔄 Cargando pedidos usando nueva función RLS...');
 
       // Verificar autenticación
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -40,34 +40,15 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         return;
       }
 
-      // Primero intentar obtener el hotel_id correcto del usuario
-      let actualHotelId = hotelId;
-      try {
-        const { data: userProfile } = await supabase
-          .from('hotel_user_settings')
-          .select('id')
-          .eq('email', user.email)
-          .maybeSingle();
-        
-        if (userProfile?.id) {
-          actualHotelId = userProfile.id;
-          console.log('🏨 Hotel ID actualizado:', actualHotelId);
-        }
-      } catch (profileError) {
-        console.log('No se pudo obtener perfil, usando ID original');
-      }
-
-      // Cargar pedidos usando el hotel_id correcto
+      // Cargar pedidos usando las nuevas políticas RLS
       try {
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('*')
-          .eq('hotel_id', actualHotelId)
           .order('created_at', { ascending: false });
 
         if (ordersError) {
           console.error('Error cargando pedidos:', ordersError);
-          // En lugar de mostrar error, mostrar datos vacíos
           onOrdersLoaded([]);
           onDayStatsLoaded({
             totalFinalizados: 0,
@@ -128,7 +109,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
           console.log('🍽️ Pedidos con items formateados:', ordersWithItems.length);
           onOrdersLoaded(ordersWithItems);
         } else {
-          console.log('📭 No se encontraron pedidos para este hotel');
+          console.log('📭 No se encontraron pedidos para este usuario');
           onOrdersLoaded([]);
         }
 
@@ -142,7 +123,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
           const { data: todayOrders, error: statsError } = await supabase
             .from('orders')
             .select('total, status')
-            .eq('hotel_id', actualHotelId)
             .gte('created_at', today.toISOString())
             .lt('created_at', tomorrow.toISOString());
 
@@ -170,7 +150,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
         }
 
       } catch (permissionError) {
-        console.error('Error de permisos generales:', permissionError);
+        console.error('Error de permisos:', permissionError);
         onOrdersLoaded([]);
         onDayStatsLoaded({
           totalFinalizados: 0,

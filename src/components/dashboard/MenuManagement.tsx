@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actualHotelId, setActualHotelId] = useState<string>(hotelId);
   const [showDialog, setShowDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -53,33 +51,10 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
   useEffect(() => {
     if (hotelId) {
-      initializeMenu();
+      loadMenuItems();
+      loadCategories();
     }
   }, [hotelId]);
-
-  const initializeMenu = async () => {
-    // Primero obtener el hotel_id correcto del usuario
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: userProfile } = await supabase
-          .from('hotel_user_settings')
-          .select('id')
-          .eq('email', user.email)
-          .maybeSingle();
-        
-        if (userProfile?.id) {
-          setActualHotelId(userProfile.id);
-          console.log('🏨 Menu Hotel ID actualizado:', userProfile.id);
-        }
-      }
-    } catch (error) {
-      console.log('No se pudo obtener perfil para menú, usando ID original');
-    }
-
-    loadMenuItems();
-    loadCategories();
-  };
 
   const loadMenuItems = async () => {
     try {
@@ -91,11 +66,10 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         return;
       }
 
-      // Usar el hotel_id correcto
+      // Usar las nuevas políticas RLS simplificadas
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('hotel_id', actualHotelId)
         .order('name');
 
       if (error) {
@@ -118,7 +92,6 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { data, error } = await supabase
         .from('menu_categories')
         .select('*')
-        .eq('hotel_id', actualHotelId)
         .order('name');
 
       if (error) {
@@ -161,6 +134,21 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     e.preventDefault();
     
     try {
+      // Obtener el hotel_id del usuario usando las nuevas políticas
+      const { data: userProfile } = await supabase
+        .from('hotel_user_settings')
+        .select('id')
+        .single();
+
+      if (!userProfile) {
+        toast({
+          title: "Error",
+          description: "No se pudo obtener información del hotel",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const allergensList = formData.allergens
         .split(',')
         .map(allergen => allergen.trim())
@@ -174,7 +162,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         preparation_time: parseInt(formData.preparation_time) || 0,
         ingredients: sanitizeInput(formData.ingredients),
         allergens: allergensList,
-        hotel_id: actualHotelId, // Usar el hotel_id correcto
+        hotel_id: userProfile.id,
         available: true
       };
 
@@ -276,12 +264,21 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     setIsUploading(true);
     
     try {
-      const securePayload = createSecureWebhookPayload(selectedFile, actualHotelId);
+      const { data: userProfile } = await supabase
+        .from('hotel_user_settings')
+        .select('id')
+        .single();
+
+      if (!userProfile) {
+        throw new Error('No se pudo obtener información del hotel');
+      }
+
+      const securePayload = createSecureWebhookPayload(selectedFile, userProfile.id);
       
       const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
         headers: {
-          'X-Hotel-ID': actualHotelId,
+          'X-Hotel-ID': userProfile.id,
           'X-Timestamp': new Date().toISOString()
         }
       });

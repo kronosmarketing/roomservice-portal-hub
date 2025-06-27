@@ -30,7 +30,7 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil en hotel_user_settings usando el email del usuario
+        // Buscar perfil usando la nueva función RLS simplificada
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
@@ -39,30 +39,12 @@ const Dashboard = () => {
         
         if (error) {
           console.error("Error fetching profile:", error);
-          // Si hay error, crear un perfil temporal para que funcione
-          setUserProfile({
-            id: user.id,
-            email: user.email,
-            hotel_name: 'Mi Hotel',
-            agent_name: 'Agente IA',
-            user_role: 'hotel_manager',
-            is_active: true
-          });
-          setLoading(false);
-          return;
-        }
-
-        if (profile) {
-          console.log("Profile found:", profile);
-          setUserProfile(profile);
-        } else {
-          console.log("No profile found, creating new one");
           // Crear perfil si no existe
           const newProfileData = {
             email: user.email,
             hotel_name: 'Mi Hotel',
             agent_name: 'Agente IA',
-            user_role: 'hotel_manager' as const, // Especificar el tipo exacto
+            user_role: 'hotel_manager' as const,
             is_active: true,
             auth_provider: 'email'
           };
@@ -75,14 +57,42 @@ const Dashboard = () => {
           
           if (insertError) {
             console.error("Error creating profile:", insertError);
-            // Crear un perfil temporal para que funcione
-            setUserProfile({
-              id: user.id,
-              email: user.email,
-              hotel_name: 'Mi Hotel',
-              agent_name: 'Agente IA',
-              user_role: 'hotel_manager',
-              is_active: true
+            toast({
+              title: "Error",
+              description: "No se pudo crear el perfil de usuario",
+              variant: "destructive",
+            });
+          } else {
+            console.log("New profile created:", newProfile);
+            setUserProfile(newProfile);
+          }
+        } else if (profile) {
+          console.log("Profile found:", profile);
+          setUserProfile(profile);
+        } else {
+          // Crear perfil si no existe
+          console.log("No profile found, creating new one");
+          const newProfileData = {
+            email: user.email,
+            hotel_name: 'Mi Hotel',
+            agent_name: 'Agente IA',
+            user_role: 'hotel_manager' as const,
+            is_active: true,
+            auth_provider: 'email'
+          };
+
+          const { data: newProfile, error: insertError } = await supabase
+            .from('hotel_user_settings')
+            .insert(newProfileData)
+            .select()
+            .single();
+          
+          if (insertError) {
+            console.error("Error creating profile:", insertError);
+            toast({
+              title: "Error",
+              description: "No se pudo crear el perfil de usuario",
+              variant: "destructive",
             });
           } else {
             console.log("New profile created:", newProfile);
@@ -91,14 +101,10 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error("Unexpected error:", error);
-        // Crear un perfil temporal para que funcione
-        setUserProfile({
-          id: user.id,
-          email: user.email,
-          hotel_name: 'Mi Hotel',
-          agent_name: 'Agente IA',
-          user_role: 'hotel_manager',
-          is_active: true
+        toast({
+          title: "Error",
+          description: "Error inesperado al cargar el perfil",
+          variant: "destructive",
         });
       }
       
@@ -132,7 +138,7 @@ const Dashboard = () => {
     );
   }
 
-  // Asegurar que siempre tenemos datos mínimos para el dashboard
+  // Usar el perfil encontrado o crear uno temporal
   const dashboardUser = {
     userRole: userProfile?.user_role || 'hotel_manager',
     hotelId: userProfile?.id || user?.id,
