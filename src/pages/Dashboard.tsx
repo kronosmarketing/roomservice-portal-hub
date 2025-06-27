@@ -30,7 +30,7 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil del usuario con la nueva estructura
+        // Buscar perfil del usuario - RLS se encarga del filtrado automáticamente
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
@@ -39,9 +39,15 @@ const Dashboard = () => {
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching profile:", error);
           
-          // Si no existe el perfil, crear uno nuevo
+          // Si no existe el perfil, intentar crearlo
           if (error.code === 'PGRST116' || error.message?.includes('No rows found')) {
-            console.log("No profile found, creating new one");
+            console.log("No profile found, this should have been created automatically");
+            toast({
+              title: "Información",
+              description: "Configurando tu perfil de usuario...",
+            });
+            
+            // Intentar crear el perfil manualmente
             const newProfileData = {
               email: user.email,
               hotel_name: 'Mi Hotel',
@@ -61,7 +67,7 @@ const Dashboard = () => {
               console.error("Error creating profile:", insertError);
               toast({
                 title: "Error",
-                description: "No se pudo crear el perfil de usuario",
+                description: "No se pudo configurar el perfil de usuario",
                 variant: "destructive",
               });
             } else {
@@ -78,9 +84,8 @@ const Dashboard = () => {
       } catch (error) {
         console.error("Unexpected error:", error);
         toast({
-          title: "Error",
-          description: "Error inesperado al cargar el perfil",
-          variant: "destructive",
+          title: "Información",
+          description: "Error al cargar el perfil de usuario",
         });
       }
       

@@ -24,7 +24,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
   const loadOrders = async () => {
     try {
       onLoadingChange(true);
-      console.log('🔄 Cargando pedidos para hotel:', hotelId);
+      console.log('🔄 Cargando pedidos...');
 
       // Verificar autenticación
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -50,7 +50,6 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
-        // Mostrar mensaje más genérico por seguridad
         toast({
           title: "Información",
           description: "No se encontraron pedidos para mostrar",
@@ -147,6 +146,7 @@ const OrdersLoader = ({ hotelId, onOrdersLoaded, onDayStatsLoaded, onLoadingChan
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      // RLS se encarga del filtrado automáticamente
       const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
