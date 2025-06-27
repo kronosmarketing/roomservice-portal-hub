@@ -266,36 +266,51 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     setIsUploading(true);
     
     try {
-      const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
+      console.log('🚀 Iniciando importación de menú...');
+      console.log('📁 Archivo:', selectedFile.name, 'Tamaño:', selectedFile.size);
+      console.log('🏨 Hotel ID:', hotelId);
+
+      // Crear FormData con el archivo
+      const formData = new FormData();
+      formData.append('file', selectedFile);
       
       const response = await supabase.functions.invoke('import-menu', {
-        body: securePayload,
+        body: formData,
         headers: {
           'X-Hotel-ID': hotelId,
           'X-Timestamp': new Date().toISOString()
         }
       });
 
+      console.log('📡 Respuesta del servidor:', response);
+
       if (response.error) {
+        console.error('❌ Error en la función edge:', response.error);
         throw new Error(response.error.message || 'Error desconocido del servidor');
       }
 
+      console.log('✅ Importación exitosa');
+      
       toast({
         title: "Éxito",
         description: "Archivo enviado correctamente para procesamiento"
       });
       setShowImportDialog(false);
       setSelectedFile(null);
+      
+      // Recargar elementos del menú después de un breve delay
       setTimeout(() => {
         loadMenuItems();
       }, 2000);
       
     } catch (error: any) {
-      console.error('Error uploading file:', error);
+      console.error('💥 Error uploading file:', error);
       
       let errorMessage = "No se pudo procesar el archivo";
-      if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+      if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
         errorMessage = "Error de conexión. Verifica tu conexión a internet";
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = "El servicio está tardando demasiado en responder";
       } else if (error.message) {
         errorMessage = error.message;
       }

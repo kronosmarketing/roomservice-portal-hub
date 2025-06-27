@@ -132,23 +132,20 @@ serve(async (req) => {
       )
     }
     
-    // Crear FormData para el webhook con validación de seguridad
+    // URL del webhook
+    const WEBHOOK_URL = 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
+    
+    console.log('Preparing to send data to webhook...')
+    console.log('Hotel ID:', hotelId)
+    console.log('File name:', file.name)
+    console.log('File size:', file.size)
+
+    // Crear FormData para el webhook
     const webhookData = new FormData()
-    
-    // Agregar el archivo
     webhookData.append('file', file)
-    
-    // Agregar metadatos de seguridad sanitizados
     webhookData.append('hotelId', sanitizeInput(hotelId))
     webhookData.append('timestamp', sanitizeInput(timestamp))
     webhookData.append('source', 'lovable-app')
-
-    console.log('Preparing to send data to webhook...')
-
-    // URL del webhook - usar la variable de entorno o la URL por defecto
-    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL') || 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
-    
-    console.log('Using webhook URL:', WEBHOOK_URL.substring(0, 50) + '...')
 
     // Enviar solicitud al webhook con timeout de seguridad
     const controller = new AbortController()
@@ -172,7 +169,16 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Webhook error response:', errorText.substring(0, 200))
-      throw new Error(`Webhook responded with status: ${response.status}`)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Error processing file with external service',
+          details: response.status === 404 ? 'Service not available' : 'Processing failed'
+        }),
+        { 
+          status: 422, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
     }
 
     const result = await response.text()
@@ -193,10 +199,16 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in menu import:', error)
     
-    // No exponer detalles internos del error por seguridad
-    const publicErrorMessage = error.name === 'AbortError' 
-      ? 'Request timeout' 
-      : 'Failed to process menu import'
+    // Proporcionar detalles más específicos del error
+    let publicErrorMessage = 'Failed to process menu import'
+    
+    if (error.name === 'AbortError') {
+      publicErrorMessage = 'Request timeout - the service is taking too long to respond'
+    } else if (error.message?.includes('fetch')) {
+      publicErrorMessage = 'Network error - unable to connect to processing service'
+    } else if (error.message?.includes('TypeError')) {
+      publicErrorMessage = 'Invalid data format'
+    }
     
     return new Response(
       JSON.stringify({ 
