@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Upload } from "lucide-react";
 import { createSecureWebhookPayload, sanitizeInput } from "@/utils/inputValidation";
+import { UtensilsCrossed } from "lucide-react";
 
 interface MenuItem {
   id: string;
@@ -57,20 +58,38 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
   const loadMenuItems = async () => {
     try {
+      // Verificar autenticación primero
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log("Usuario no autenticado");
+        setMenuItems([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
         .order('name');
 
-      if (error) throw error;
-      setMenuItems(data || []);
+      if (error) {
+        console.error('Error loading menu items:', error);
+        // Si es error de permisos, mostrar estado vacío sin error
+        if (error.code === '42501' || error.code === 'PGRST301') {
+          setMenuItems([]);
+        } else {
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar los elementos del menú",
+            variant: "destructive"
+          });
+        }
+      } else {
+        setMenuItems(data || []);
+      }
     } catch (error) {
       console.error('Error loading menu items:', error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los elementos del menú",
-        variant: "destructive"
-      });
+      setMenuItems([]);
     } finally {
       setLoading(false);
     }
@@ -83,10 +102,15 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         .select('*')
         .order('name');
 
-      if (error) throw error;
-      setCategories(data || []);
+      if (error) {
+        console.error('Error loading categories:', error);
+        setCategories([]);
+      } else {
+        setCategories(data || []);
+      }
     } catch (error) {
       console.error('Error loading categories:', error);
+      setCategories([]);
     }
   };
 
@@ -309,68 +333,75 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Precio</TableHead>
-                <TableHead>Tiempo (min)</TableHead>
-                <TableHead>Alérgenos</TableHead>
-                <TableHead>Disponible</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {menuItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="max-w-xs truncate">{item.description}</TableCell>
-                  <TableCell className="text-green-600 font-bold">€{item.price}</TableCell>
-                  <TableCell>{item.preparation_time || '-'}</TableCell>
-                  <TableCell className="max-w-xs">
-                    {item.allergens && item.allergens.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {item.allergens.map((allergen, index) => (
-                          <span
-                            key={index}
-                            className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full"
-                          >
-                            {allergen}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">Sin alérgenos</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={item.available}
-                      onCheckedChange={() => handleAvailabilityToggle(item.id, item.available)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {menuItems.length === 0 && (
+          {menuItems.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-500 mb-4">
+                <UtensilsCrossed className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-lg">No hay elementos en el menú</p>
+                <p className="text-sm">Agrega tu primer elemento para empezar</p>
+              </div>
+              <Button onClick={() => setShowDialog(true)} className="mt-4">
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar Primer Elemento
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No hay elementos en el menú
-                  </TableCell>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Precio</TableHead>
+                  <TableHead>Tiempo (min)</TableHead>
+                  <TableHead>Alérgenos</TableHead>
+                  <TableHead>Disponible</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {menuItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="max-w-xs truncate">{item.description}</TableCell>
+                    <TableCell className="text-green-600 font-bold">€{item.price}</TableCell>
+                    <TableCell>{item.preparation_time || '-'}</TableCell>
+                    <TableCell className="max-w-xs">
+                      {item.allergens && item.allergens.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {item.allergens.map((allergen, index) => (
+                            <span
+                              key={index}
+                              className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full"
+                            >
+                              {allergen}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">Sin alérgenos</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={item.available}
+                        onCheckedChange={() => handleAvailabilityToggle(item.id, item.available)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

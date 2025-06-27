@@ -30,21 +30,16 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil en hotel_user_settings
+        // Buscar perfil en hotel_user_settings usando el email del usuario
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
           .eq('email', user.email)
           .maybeSingle();
         
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error("Error fetching profile:", error);
-          toast({
-            title: "Error",
-            description: "Error al cargar el perfil de usuario",
-            variant: "destructive",
-          });
-          return;
+          // No mostrar error al usuario para este caso
         }
 
         if (profile) {
@@ -53,27 +48,24 @@ const Dashboard = () => {
         } else {
           console.log("No profile found, creating new one");
           // Crear perfil si no existe
+          const newProfileData = {
+            email: user.email,
+            hotel_name: 'Mi Hotel',
+            agent_name: 'Agente IA',
+            user_role: 'hotel_manager',
+            is_active: true,
+            auth_provider: 'email'
+          };
+
           const { data: newProfile, error: insertError } = await supabase
             .from('hotel_user_settings')
-            .insert({
-              email: user.email,
-              hotel_name: 'Mi Hotel',
-              agent_name: 'Agente IA',
-              user_role: 'hotel_manager',
-              is_active: true,
-              auth_provider: 'email'
-            })
+            .insert(newProfileData)
             .select()
             .single();
           
           if (insertError) {
             console.error("Error creating profile:", insertError);
-            toast({
-              title: "Error",
-              description: "Error al crear el perfil de usuario",
-              variant: "destructive",
-            });
-            // Crear un perfil temporal
+            // Crear un perfil temporal para que funcione
             setUserProfile({
               id: user.id,
               email: user.email,
@@ -89,11 +81,6 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error("Unexpected error:", error);
-        toast({
-          title: "Error",
-          description: "Error inesperado al configurar el perfil",
-          variant: "destructive",
-        });
         // Crear un perfil temporal para que funcione
         setUserProfile({
           id: user.id,
@@ -158,7 +145,7 @@ const Dashboard = () => {
           
           <div className="flex items-center space-x-4">
             <span className="text-white/80">
-              {dashboardUser.hotelName}
+              {dashboardUser.hotelName} - {dashboardUser.email}
             </span>
             <Button
               onClick={handleLogout}
