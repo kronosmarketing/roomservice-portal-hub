@@ -2,7 +2,8 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Package, UtensilsCrossed } from "lucide-react";
-import { validateUserHotelAccess, logSecurityEvent } from "./orders/securityUtils";
+import { validateUserHotelAccess } from "./orders/security/authValidation";
+import { logSecurityEvent } from "./orders/security/securityLogging";
 import { useToast } from "@/hooks/use-toast";
 import SecurityAuditLogger from "./orders/SecurityAuditLogger";
 import EnhancedSecurityValidation from "./orders/EnhancedSecurityValidation";
@@ -54,7 +55,7 @@ const SecureDashboardContent = ({ user }: SecureDashboardContentProps) => {
         setHasAccess(true);
       }
     } catch (error) {
-      console.error('Error validando acceso al dashboard:', error);
+      console.error('Error validating dashboard access:', error);
       await logSecurityEvent('dashboard_access_error', 'dashboard', user.hotelId, {
         error: String(error),
         userEmail: user.email

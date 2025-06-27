@@ -1,36 +1,13 @@
-// Main security utilities - re-export from modular files for backward compatibility
-export * from './security';
 
-// Keep the original exports for backward compatibility
-export {
-  validateUserHotelAccess,
-  verifyAuthentication,
-  auditSession
+// Legacy security utilities - now using new standardized functions
+export { 
+  validateUserHotelAccess, 
+  verifyAuthentication, 
+  auditSession 
 } from './security/authValidation';
 
-export {
-  sanitizeInput,
-  sanitizeHtml,
-  generateSecureHash
-} from './security/inputSanitization';
+export { logSecurityEvent } from './security/securityLogging';
 
-export {
-  validateOrderId,
-  validateRoomNumber,
-  validateAmount,
-  validateEmail,
-  validatePhone,
-  validateAndSanitizeInput
-} from './security/inputValidation';
+export { validateFileUpload } from './security/inputValidation';
 
-export {
-  validateFileUpload
-} from './security/fileValidation';
-
-export {
-  checkRateLimit
-} from './security/rateLimiting';
-
-export {
-  logSecurityEvent
-} from './security/securityLogging';
+export { checkRateLimit } from './security/rateLimiting';

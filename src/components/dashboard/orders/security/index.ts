@@ -1,8 +1,11 @@
 
-// Export all security utilities from a single entry point
-export * from './authValidation';
-export * from './inputSanitization';
-export * from './inputValidation';
-export * from './fileValidation';
-export * from './rateLimiting';
-export * from './securityLogging';
+// Consolidated security utilities with standardized approach
+export { validateUserHotelAccess, verifyAuthentication, auditSession } from './authValidation';
+export { logSecurityEvent } from './securityLogging';
+export { 
+  validateFileUpload, 
+  validateAndSanitizeText, 
+  validateAmount, 
+  validateRoomNumber 
+} from './inputValidation';
+export { checkRateLimit } from './rateLimiting';

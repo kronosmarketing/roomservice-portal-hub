@@ -1,24 +1,38 @@
 
-/**
- * Rate limiting simple en memoria (para producción usar Redis)
- */
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+import { supabase } from "@/integrations/supabase/client";
+import { logSecurityEvent } from "./securityLogging";
 
-export const checkRateLimit = (identifier: string, maxRequests: number = 100, windowMs: number = 60000): boolean => {
-  const now = Date.now();
-  const key = identifier;
-  
-  const current = rateLimitMap.get(key);
-  
-  if (!current || now > current.resetTime) {
-    rateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
-    return true;
-  }
-  
-  if (current.count >= maxRequests) {
+/**
+ * Check rate limiting using the new secure database function
+ */
+export const checkRateLimit = async (
+  action: string,
+  maxRequests: number = 50,
+  windowMinutes: number = 15
+): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.rpc('check_secure_rate_limit', {
+      action_name: action,
+      max_requests: maxRequests,
+      window_minutes: windowMinutes
+    });
+    
+    if (error) {
+      console.error('Rate limit check error:', error);
+      await logSecurityEvent('rate_limit_check_error', 'security', null, { 
+        error: error.message,
+        action 
+      });
+      return false;
+    }
+    
+    return data === true;
+  } catch (error) {
+    console.error('Rate limit check exception:', error);
+    await logSecurityEvent('rate_limit_check_exception', 'security', null, { 
+      error: String(error),
+      action 
+    });
     return false;
   }
-  
-  current.count++;
-  return true;
 };

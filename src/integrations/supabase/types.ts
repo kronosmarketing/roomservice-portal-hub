@@ -460,6 +460,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_secure_rate_limit: {
+        Args: {
+          action_name: string
+          max_requests?: number
+          window_minutes?: number
+        }
+        Returns: boolean
+      }
       delete_order_with_items: {
         Args: { order_id_param: string; hotel_id_param: string }
         Returns: undefined
@@ -567,6 +575,10 @@ export type Database = {
         Returns: boolean
       }
       validate_session_integrity: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      validate_user_session_integrity: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }

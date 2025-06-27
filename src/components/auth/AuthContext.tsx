@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { auditSession } from '@/components/dashboard/orders/security/authValidation';
+import { logSecurityEvent } from '@/components/dashboard/orders/security/securityLogging';
 
 interface AuthContextType {
   user: User | null;
@@ -32,17 +34,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Set up auth state listener with enhanced security
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log('Auth state change:', event, session?.user?.email);
+        
+        if (session?.user) {
+          // Perform session integrity check for authenticated users
+          try {
+            const isValid = await auditSession();
+            if (!isValid) {
+              console.warn('Session integrity check failed');
+              await logSecurityEvent('invalid_session_detected', 'auth', null);
+              await supabase.auth.signOut();
+              setSession(null);
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.error('Session audit failed:', error);
+          }
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
 
-    // THEN check for existing session
+    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -52,9 +73,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Periodic session integrity check
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const isValid = await auditSession();
+        if (!isValid) {
+          console.warn('Periodic session check failed - signing out');
+          await signOut();
+        }
+      } catch (error) {
+        console.error('Periodic session check error:', error);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const signUp = async (email: string, password: string, userData?: any) => {
     try {
-      // CRITICAL: Always set emailRedirectTo to prevent authentication issues
+      await logSecurityEvent('signup_attempt', 'auth', null, { email });
+      
       const redirectUrl = `${window.location.origin}/dashboard`;
       
       const { error } = await supabase.auth.signUp({
@@ -66,8 +107,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        await logSecurityEvent('signup_failed', 'auth', null, { email, error: error.message });
+        throw error;
+      }
 
+      await logSecurityEvent('signup_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
       console.error('Sign up error:', error);
@@ -77,13 +122,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      await logSecurityEvent('signin_attempt', 'auth', null, { email });
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        await logSecurityEvent('signin_failed', 'auth', null, { email, error: error.message });
+        throw error;
+      }
 
+      await logSecurityEvent('signin_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
       console.error('Sign in error:', error);
@@ -93,8 +144,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
+      await logSecurityEvent('signout_attempt', 'auth', null);
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      
+      await logSecurityEvent('signout_success', 'auth', null);
       return { error: null };
     } catch (error: any) {
       console.error('Sign out error:', error);

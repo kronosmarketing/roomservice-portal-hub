@@ -1,84 +1,78 @@
 
-import { useState, useEffect } from "react";
-import { validateUserHotelAccess, logSecurityEvent, checkRateLimit } from "./securityUtils";
-import { useToast } from "@/hooks/use-toast";
+import React, { useState, useEffect, ReactNode } from 'react';
+import { validateUserHotelAccess, auditSession } from './security/authValidation';
+import { checkRateLimit } from './security/rateLimiting';
+import { logSecurityEvent } from './security/securityLogging';
 
 interface EnhancedSecurityValidationProps {
   hotelId: string;
   operation: string;
-  children: (isAuthorized: boolean, validateOperation: (action: string) => Promise<boolean>) => React.ReactNode;
+  children: (isAuthorized: boolean) => ReactNode;
 }
 
-const EnhancedSecurityValidation = ({ hotelId, operation, children }: EnhancedSecurityValidationProps) => {
+const EnhancedSecurityValidation = ({ 
+  hotelId, 
+  operation, 
+  children 
+}: EnhancedSecurityValidationProps) => {
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     validateAccess();
-  }, [hotelId]);
+  }, [hotelId, operation]);
 
   const validateAccess = async () => {
     try {
-      const hasAccess = await validateUserHotelAccess(hotelId);
-      
-      if (!hasAccess) {
-        await logSecurityEvent('unauthorized_access_attempt', operation, hotelId);
-        toast({
-          title: "Acceso denegado",
-          description: "No tienes permisos para esta operación",
-          variant: "destructive"
-        });
+      // Rate limiting check
+      const rateLimitOk = await checkRateLimit(operation, 100, 15);
+      if (!rateLimitOk) {
+        await logSecurityEvent('rate_limit_exceeded', operation, hotelId);
         setIsAuthorized(false);
-      } else {
-        await logSecurityEvent('access_validated', operation, hotelId);
-        setIsAuthorized(true);
+        setIsLoading(false);
+        return;
       }
+
+      // Session integrity check
+      const sessionValid = await auditSession();
+      if (!sessionValid) {
+        setIsAuthorized(false);
+        setIsLoading(false);
+        return;
+      }
+
+      // Hotel access validation
+      const hasAccess = await validateUserHotelAccess(hotelId);
+      if (!hasAccess) {
+        await logSecurityEvent('unauthorized_operation_attempt', operation, hotelId);
+        setIsAuthorized(false);
+        setIsLoading(false);
+        return;
+      }
+
+      await logSecurityEvent('operation_authorized', operation, hotelId);
+      setIsAuthorized(true);
     } catch (error) {
-      console.error('Error validando acceso:', error);
-      await logSecurityEvent('access_validation_error', operation, hotelId, { error: String(error) });
+      console.error('Security validation error:', error);
+      await logSecurityEvent('security_validation_error', operation, hotelId, { 
+        error: String(error) 
+      });
       setIsAuthorized(false);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const validateOperation = async (action: string): Promise<boolean> => {
-    // Rate limiting check
-    const rateLimitPassed = checkRateLimit(`${operation}_${action}`, 50, 15);
-    if (!rateLimitPassed) {
-      await logSecurityEvent('rate_limit_exceeded', operation, hotelId, { action });
-      toast({
-        title: "Límite de operaciones excedido",
-        description: "Por favor, espera antes de realizar más operaciones",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    // Re-validate access for sensitive operations
-    const hasAccess = await validateUserHotelAccess(hotelId);
-    if (!hasAccess) {
-      await logSecurityEvent('operation_access_denied', operation, hotelId, { action });
-      return false;
-    }
-
-    await logSecurityEvent('operation_authorized', operation, hotelId, { action });
-    return true;
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-500">Validando permisos...</p>
-        </div>
+      <div className="flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+        <span className="ml-2 text-sm text-gray-600">Validating permissions...</span>
       </div>
     );
   }
 
-  return <>{children(isAuthorized, validateOperation)}</>;
+  return <>{children(isAuthorized)}</>;
 };
 
 export default EnhancedSecurityValidation;

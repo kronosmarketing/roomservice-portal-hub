@@ -1,118 +1,151 @@
 
-/**
- * Valida que un ID de pedido tiene el formato correcto
- */
-export const validateOrderId = (orderId: string): boolean => {
-  if (!orderId || typeof orderId !== 'string') {
-    return false;
-  }
+import { checkRateLimit } from "./rateLimiting";
+import { logSecurityEvent } from "./securityLogging";
 
-  const trimmedId = orderId.trim();
-  
-  // Debe ser un UUID válido
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidPattern.test(trimmedId);
-};
+interface ValidationResult {
+  isValid: boolean;
+  sanitizedValue?: string;
+  error?: string;
+}
 
 /**
- * Valida que un número de habitación es válido
+ * Validates and sanitizes text input with security logging
  */
-export const validateRoomNumber = (roomNumber: string): boolean => {
-  if (!roomNumber || typeof roomNumber !== 'string') {
-    return false;
-  }
-
-  const trimmed = roomNumber.trim();
-  
-  // Debe ser alfanumérico, entre 1 y 20 caracteres, sin caracteres especiales peligrosos
-  const roomPattern = /^[a-zA-Z0-9\-]{1,20}$/;
-  return roomPattern.test(trimmed);
-};
-
-/**
- * Valida que un monto es válido
- */
-export const validateAmount = (amount: number): boolean => {
-  return typeof amount === 'number' && 
-         amount >= 0 && 
-         amount <= 10000 && // Límite máximo razonable
-         Number.isFinite(amount) &&
-         !Number.isNaN(amount);
-};
-
-/**
- * Valida que un email tiene formato válido
- */
-export const validateEmail = (email: string): boolean => {
-  if (!email || typeof email !== 'string') {
-    return false;
-  }
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailPattern.test(email) && email.length <= 254;
-};
-
-/**
- * Valida que un teléfono tiene formato válido
- */
-export const validatePhone = (phone: string): boolean => {
-  if (!phone || typeof phone !== 'string') {
-    return false;
-  }
-
-  const phonePattern = /^[\+]?[1-9][\d]{0,15}$/;
-  return phonePattern.test(phone.replace(/[\s\-\(\)]/g, ''));
-};
-
-/**
- * Valida y sanitiza datos de entrada con validación específica por tipo
- */
-export const validateAndSanitizeInput = (
+export const validateAndSanitizeText = async (
   input: string, 
-  type: 'text' | 'email' | 'phone' | 'roomNumber' | 'orderId' | 'amount',
-  maxLength: number = 255
-): { isValid: boolean; sanitizedValue: string; error?: string } => {
-  
-  if (!input || typeof input !== 'string') {
-    return { isValid: false, sanitizedValue: '', error: 'Entrada requerida' };
+  maxLength: number = 255,
+  fieldName: string = 'text_field'
+): Promise<ValidationResult> => {
+  try {
+    // Check rate limiting for validation requests
+    const rateLimitOk = await checkRateLimit('input_validation', 100, 5);
+    if (!rateLimitOk) {
+      await logSecurityEvent('rate_limit_exceeded', 'input_validation', fieldName);
+      return { isValid: false, error: 'Too many validation requests' };
+    }
+
+    if (!input || typeof input !== 'string') {
+      return { isValid: false, error: 'Input is required and must be text' };
+    }
+
+    if (input.length > maxLength) {
+      return { isValid: false, error: `Input exceeds maximum length of ${maxLength} characters` };
+    }
+
+    // Basic XSS protection
+    const sanitized = input
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '')
+      .trim();
+
+    // SQL injection patterns
+    const sqlPatterns = [
+      /(\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|\bcreate\b|\balter\b)/i,
+      /(union|or|and)\s+\d+\s*=\s*\d+/i,
+      /['"]\s*(or|and)\s+['"]\w+['"]\s*=\s*['"]\w+['"]|['"]\s*;\s*drop\s/i
+    ];
+
+    for (const pattern of sqlPatterns) {
+      if (pattern.test(sanitized)) {
+        await logSecurityEvent('sql_injection_attempt', 'input_validation', fieldName, { 
+          input: input.substring(0, 100) 
+        });
+        return { isValid: false, error: 'Invalid input detected' };
+      }
+    }
+
+    return { isValid: true, sanitizedValue: sanitized };
+  } catch (error) {
+    await logSecurityEvent('input_validation_error', 'input_validation', fieldName, { 
+      error: String(error) 
+    });
+    return { isValid: false, error: 'Validation error occurred' };
+  }
+};
+
+/**
+ * Validates numeric amounts with security checks
+ */
+export const validateAmount = async (amount: number): Promise<ValidationResult> => {
+  try {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      return { isValid: false, error: 'Amount must be a valid number' };
+    }
+
+    if (amount < 0) {
+      return { isValid: false, error: 'Amount cannot be negative' };
+    }
+
+    if (amount > 999999.99) {
+      await logSecurityEvent('suspicious_amount', 'input_validation', 'amount', { amount });
+      return { isValid: false, error: 'Amount is too large' };
+    }
+
+    const rounded = Math.round(amount * 100) / 100;
+    return { isValid: true, sanitizedValue: rounded.toString() };
+  } catch (error) {
+    return { isValid: false, error: 'Amount validation failed' };
+  }
+};
+
+/**
+ * Validates room numbers with security checks
+ */
+export const validateRoomNumber = async (roomNumber: string): Promise<ValidationResult> => {
+  try {
+    const textValidation = await validateAndSanitizeText(roomNumber, 20, 'room_number');
+    if (!textValidation.isValid) {
+      return textValidation;
+    }
+
+    const sanitized = textValidation.sanitizedValue!;
+    
+    // Room number specific validation
+    if (!/^[A-Za-z0-9\-\.]+$/.test(sanitized)) {
+      return { isValid: false, error: 'Room number contains invalid characters' };
+    }
+
+    return { isValid: true, sanitizedValue: sanitized };
+  } catch (error) {
+    return { isValid: false, error: 'Room number validation failed' };
+  }
+};
+
+/**
+ * Validates file uploads with comprehensive security checks
+ */
+export const validateFileUpload = (file: File): { valid: boolean; error?: string } => {
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  const allowedTypes = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv',
+    'application/json',
+    'text/plain'
+  ];
+
+  if (file.size > maxSize) {
+    return { valid: false, error: 'File size exceeds 10MB limit' };
   }
 
-  const sanitized = input.trim().substring(0, maxLength);
-  
-  switch (type) {
-    case 'email':
-      if (!validateEmail(sanitized)) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de email inválido' };
-      }
-      break;
-    case 'phone':
-      if (!validatePhone(sanitized)) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de teléfono inválido' };
-      }
-      break;
-    case 'roomNumber':
-      if (!validateRoomNumber(sanitized)) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Número de habitación inválido' };
-      }
-      break;
-    case 'orderId':
-      if (!validateOrderId(sanitized)) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Formato de ID de pedido inválido' };
-      }
-      break;
-    case 'amount':
-      const numValue = parseFloat(sanitized);
-      if (!validateAmount(numValue)) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Monto inválido' };
-      }
-      break;
-    case 'text':
-    default:
-      if (sanitized.length === 0) {
-        return { isValid: false, sanitizedValue: sanitized, error: 'Texto requerido' };
-      }
-      break;
+  if (!allowedTypes.includes(file.type)) {
+    return { valid: false, error: 'File type not allowed' };
   }
 
-  return { isValid: true, sanitizedValue: sanitized };
+  // Check for suspicious file names
+  const suspiciousPatterns = [
+    /\.(exe|bat|cmd|scr|vbs|js|jar)$/i,
+    /[<>:"|?*]/,
+    /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
+  ];
+
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(file.name)) {
+      return { valid: false, error: 'File name contains invalid characters' };
+    }
+  }
+
+  return { valid: true };
 };

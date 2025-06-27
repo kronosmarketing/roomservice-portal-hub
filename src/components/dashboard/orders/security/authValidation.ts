@@ -3,24 +3,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "./securityLogging";
 
 /**
- * Valida que el usuario actual tiene acceso al hotel especificado
+ * Validates user access to hotel using the new standardized function
  */
 export const validateUserHotelAccess = async (hotelId: string): Promise<boolean> => {
   try {
-    // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       await logSecurityEvent('failed_authentication', 'hotel_access_validation', hotelId);
       return false;
     }
 
-    // Usar la función de base de datos para validar acceso
     const { data, error } = await supabase.rpc('user_has_hotel_access', {
       target_hotel_id: hotelId
     });
     
     if (error) {
-      console.error('❌ Error validando acceso al hotel:', error);
+      console.error('❌ Error validating hotel access:', error);
       await logSecurityEvent('access_validation_error', 'hotel', hotelId, { error: error.message });
       return false;
     }
@@ -33,14 +31,14 @@ export const validateUserHotelAccess = async (hotelId: string): Promise<boolean>
 
     return hasAccess;
   } catch (error) {
-    console.error('❌ Error en validación de seguridad:', error);
+    console.error('❌ Error in security validation:', error);
     await logSecurityEvent('security_validation_exception', 'hotel', hotelId, { error: String(error) });
     return false;
   }
 };
 
 /**
- * Verifica si el usuario está autenticado
+ * Verifies if the user is authenticated
  */
 export const verifyAuthentication = async (): Promise<boolean> => {
   try {
@@ -52,11 +50,11 @@ export const verifyAuthentication = async (): Promise<boolean> => {
 };
 
 /**
- * Función de auditoría de sesión que verifica integridad periódicamente
+ * Audits current session integrity using the new database function
  */
 export const auditSession = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.rpc('validate_session_integrity');
+    const { data, error } = await supabase.rpc('validate_user_session_integrity');
     
     if (error) {
       await logSecurityEvent('session_audit_error', 'security', null, { error: error.message });
