@@ -116,16 +116,38 @@ const EnhancedOrdersLoader = ({
 
       console.log('🗓️ Cargando estadísticas para:', today.toISOString(), 'hasta', tomorrow.toISOString());
 
-      // Cargar TODOS los pedidos para debug
+      // Cargar TODOS los pedidos para debug - Sin filtro de fecha primero
       const { data: allOrders, error: allOrdersError } = await supabase
         .from('orders')
-        .select('id, total, status, created_at');
+        .select('id, total, status, created_at')
+        .order('created_at', { ascending: false });
 
       if (allOrdersError) {
         console.error('Error cargando todos los pedidos:', allOrdersError);
       } else {
-        console.log('🔍 Todos los pedidos en DB:', allOrders?.length || 0);
-        console.log('🔍 Estados de pedidos:', allOrders?.map(o => ({ id: o.id.substring(0, 8), status: o.status, total: o.total })));
+        console.log('🔍 TODOS los pedidos en DB:', allOrders?.length || 0);
+        
+        // Agrupar por estado para ver qué estados existen
+        const statusGroups = allOrders?.reduce((groups, order) => {
+          const status = order.status || 'sin_estado';
+          if (!groups[status]) {
+            groups[status] = [];
+          }
+          groups[status].push({
+            id: order.id.substring(0, 8),
+            total: order.total,
+            created_at: order.created_at
+          });
+          return groups;
+        }, {} as Record<string, any[]>) || {};
+        
+        console.log('📊 ESTADOS DE PEDIDOS ENCONTRADOS:', Object.keys(statusGroups));
+        Object.entries(statusGroups).forEach(([status, orders]) => {
+          console.log(`   ${status}: ${orders.length} pedidos`);
+          if (status.includes('complet') || status.includes('entregad') || status.includes('finaliz')) {
+            console.log(`     ✅ Pedidos ${status}:`, orders);
+          }
+        });
       }
 
       // Cargar pedidos del día para estadísticas
@@ -152,13 +174,22 @@ const EnhancedOrdersLoader = ({
         console.error('Error cargando elementos del menú:', menuError);
       }
 
-      // Filtrar pedidos completados con diferentes variaciones posibles
-      const completedOrders = todayOrders?.filter(o => 
-        o.status === 'completado' || 
-        o.status === 'completados' || 
-        o.status === 'entregado' ||
-        o.status === 'finalizado'
-      ) || [];
+      // Ampliar la búsqueda de pedidos completados con más variaciones
+      const completedStatuses = [
+        'completado', 'completados', 'completed',
+        'entregado', 'entregados', 'delivered',
+        'finalizado', 'finalizados', 'finished',
+        'listo', 'ready', 'done', 'terminado'
+      ];
+
+      const completedOrders = todayOrders?.filter(order => {
+        const status = (order.status || '').toLowerCase().trim();
+        const isCompleted = completedStatuses.some(completedStatus => 
+          status.includes(completedStatus.toLowerCase())
+        );
+        console.log(`🔍 Pedido estado '${order.status}' -> ${isCompleted ? 'COMPLETADO' : 'NO COMPLETADO'}`);
+        return isCompleted;
+      }) || [];
 
       console.log('✅ Pedidos completados encontrados:', completedOrders.length);
       console.log('✅ Detalle completados:', completedOrders.map(o => ({ status: o.status, total: o.total })));
@@ -169,7 +200,7 @@ const EnhancedOrdersLoader = ({
       // Calcular ventas del día sumando los totales
       const ventasDelDia = completedOrders.reduce((sum, order) => {
         const orderTotal = parseFloat(order.total?.toString() || '0');
-        console.log('💰 Sumando pedido:', order.total, 'parseado como:', orderTotal);
+        console.log('💰 Sumando pedido completado:', order.status, 'total:', order.total, 'parseado como:', orderTotal);
         return sum + orderTotal;
       }, 0);
 
@@ -180,7 +211,15 @@ const EnhancedOrdersLoader = ({
         totalPlatos: totalItems
       };
 
-      console.log('📊 Estadísticas finales calculadas:', stats);
+      console.log('📊 ESTADÍSTICAS FINALES CALCULADAS:', stats);
+      console.log('📊 ENHANCED RESUMEN:', {
+        'Total pedidos hoy': todayOrders?.length || 0,
+        'Pedidos completados hoy': completedOrders.length,
+        'Ventas del día': `€${ventasDelDia.toFixed(2)}`,
+        'Platos disponibles': availableItems.length,
+        'Total platos': totalItems
+      });
+      
       onDayStatsLoaded(stats);
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
