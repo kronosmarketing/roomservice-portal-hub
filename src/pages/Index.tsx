@@ -11,14 +11,17 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const { user, signIn } = useAuth();
+  const { user, signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    hotelName: '',
+    agentName: '',
+    phoneRoomservice: ''
   });
 
   // Redirect authenticated users to dashboard
@@ -37,16 +40,39 @@ const Index = () => {
     setLoading(true);
 
     try {
-      const { error } = await signIn(formData.email, formData.password);
+      if (isLogin) {
+        // Login
+        const { error } = await signIn(formData.email, formData.password);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: "¡Bienvenido!",
-        description: "Has iniciado sesión correctamente.",
-      });
+        toast({
+          title: "¡Bienvenido!",
+          description: "Has iniciado sesión correctamente.",
+        });
 
-      navigate('/dashboard');
+        navigate('/dashboard');
+      } else {
+        // Register
+        const userData = {
+          hotel_name: formData.hotelName,
+          agent_name: formData.agentName,
+          phone_roomservice: formData.phoneRoomservice,
+        };
+
+        const { error } = await signUp(formData.email, formData.password, userData);
+
+        if (error) throw error;
+
+        toast({
+          title: "¡Registro exitoso!",
+          description: "Tu cuenta ha sido creada. Puedes iniciar sesión ahora.",
+        });
+
+        // Switch to login mode after successful registration
+        setIsLogin(true);
+        setFormData(prev => ({ ...prev, hotelName: '', agentName: '', phoneRoomservice: '' }));
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -68,11 +94,11 @@ const Index = () => {
             Marjor<span className="text-orange-400">AI</span>
           </h1>
           <p className="text-xl text-white/90">
-            Accede a tu panel de control
+            {isLogin ? 'Accede a tu panel de control' : 'Crea tu cuenta'}
           </p>
         </div>
 
-        {/* Login Form */}
+        {/* Login/Register Form */}
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
           {/* Tab Buttons */}
           <div className="flex mb-6 bg-white/10 rounded-xl p-1">
@@ -100,6 +126,54 @@ const Index = () => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Registration fields */}
+            {!isLogin && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="hotelName" className="text-white font-medium">
+                    Nombre del Hotel *
+                  </Label>
+                  <Input
+                    id="hotelName"
+                    value={formData.hotelName}
+                    onChange={(e) => handleInputChange("hotelName", e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
+                    placeholder="Hotel Paradise"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="agentName" className="text-white font-medium">
+                    Nombre del Agente *
+                  </Label>
+                  <Input
+                    id="agentName"
+                    value={formData.agentName}
+                    onChange={(e) => handleInputChange("agentName", e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
+                    placeholder="Juan Pérez"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="phoneRoomservice" className="text-white font-medium">
+                    Teléfono Room Service
+                  </Label>
+                  <Input
+                    id="phoneRoomservice"
+                    type="tel"
+                    value={formData.phoneRoomservice}
+                    onChange={(e) => handleInputChange("phoneRoomservice", e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
+                    placeholder="+34 123 456 789"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Email and Password fields */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-white font-medium">
                 Correo Electrónico *
@@ -135,7 +209,7 @@ const Index = () => {
               className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 rounded-xl font-semibold text-lg"
               disabled={loading}
             >
-              {loading ? 'Procesando...' : 'Iniciar Sesión'}
+              {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Crear Cuenta')}
             </Button>
           </form>
 
