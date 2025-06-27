@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [userHotelId, setUserHotelId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -51,25 +53,52 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
 
   useEffect(() => {
     if (hotelId) {
-      loadMenuItems();
-      loadCategories();
+      initializeMenuManagement();
     }
   }, [hotelId]);
 
-  const loadMenuItems = async () => {
+  const initializeMenuManagement = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log("Usuario no autenticado");
-        setMenuItems([]);
+      // Verificar autenticación
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('Error de autenticación:', authError);
         setLoading(false);
         return;
       }
 
-      // Usar las nuevas políticas RLS simplificadas
+      console.log('Usuario autenticado:', user.email);
+
+      // Obtener el hotel_id del usuario actual
+      const { data: userProfile, error: profileError } = await supabase
+        .from('hotel_user_settings')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (profileError || !userProfile) {
+        console.error('Error obteniendo perfil de usuario:', profileError);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Hotel ID del usuario:', userProfile.id);
+      setUserHotelId(userProfile.id);
+
+      await loadMenuItems(userProfile.id);
+      await loadCategories(userProfile.id);
+    } catch (error) {
+      console.error('Error inicializando gestión de menú:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadMenuItems = async (currentUserHotelId: string) => {
+    try {
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
+        .eq('hotel_id', currentUserHotelId)
         .order('name');
 
       if (error) {
@@ -87,11 +116,12 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
     }
   };
 
-  const loadCategories = async () => {
+  const loadCategories = async (currentUserHotelId: string) => {
     try {
       const { data, error } = await supabase
         .from('menu_categories')
         .select('*')
+        .eq('hotel_id', currentUserHotelId)
         .order('name');
 
       if (error) {
@@ -111,7 +141,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .update({ available: !currentAvailability })
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .eq('hotel_id', userHotelId);
 
       if (error) throw error;
       
@@ -119,7 +150,9 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         title: "Éxito",
         description: `Elemento ${!currentAvailability ? 'activado' : 'desactivado'} correctamente`
       });
-      await loadMenuItems();
+      if (userHotelId) {
+        await loadMenuItems(userHotelId);
+      }
     } catch (error) {
       console.error('Error updating availability:', error);
       toast({
@@ -133,22 +166,16 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!userHotelId) {
+      toast({
+        title: "Error",
+        description: "No se pudo obtener información del hotel",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      // Obtener el hotel_id del usuario usando las nuevas políticas
-      const { data: userProfile } = await supabase
-        .from('hotel_user_settings')
-        .select('id')
-        .single();
-
-      if (!userProfile) {
-        toast({
-          title: "Error",
-          description: "No se pudo obtener información del hotel",
-          variant: "destructive"
-        });
-        return;
-      }
-
       const allergensList = formData.allergens
         .split(',')
         .map(allergen => allergen.trim())
@@ -162,7 +189,7 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         preparation_time: parseInt(formData.preparation_time) || 0,
         ingredients: sanitizeInput(formData.ingredients),
         allergens: allergensList,
-        hotel_id: userProfile.id,
+        hotel_id: userHotelId,
         available: true
       };
 
@@ -170,7 +197,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         const { error } = await supabase
           .from('menu_items')
           .update(itemData)
-          .eq('id', editingItem.id);
+          .eq('id', editingItem.id)
+          .eq('hotel_id', userHotelId);
 
         if (error) throw error;
         toast({
@@ -200,7 +228,9 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         ingredients: "",
         allergens: ""
       });
-      await loadMenuItems();
+      if (userHotelId) {
+        await loadMenuItems(userHotelId);
+      }
     } catch (error) {
       console.error('Error saving menu item:', error);
       toast({
@@ -232,7 +262,8 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       const { error } = await supabase
         .from('menu_items')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('hotel_id', userHotelId);
 
       if (error) throw error;
       
@@ -240,7 +271,9 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
         title: "Éxito",
         description: "Elemento eliminado correctamente"
       });
-      await loadMenuItems();
+      if (userHotelId) {
+        await loadMenuItems(userHotelId);
+      }
     } catch (error) {
       console.error('Error deleting menu item:', error);
       toast({
@@ -261,24 +294,24 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       return;
     }
 
+    if (!userHotelId) {
+      toast({
+        title: "Error",
+        description: "No se pudo obtener información del hotel",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsUploading(true);
     
     try {
-      const { data: userProfile } = await supabase
-        .from('hotel_user_settings')
-        .select('id')
-        .single();
-
-      if (!userProfile) {
-        throw new Error('No se pudo obtener información del hotel');
-      }
-
-      const securePayload = createSecureWebhookPayload(selectedFile, userProfile.id);
+      const securePayload = createSecureWebhookPayload(selectedFile, userHotelId);
       
       const response = await supabase.functions.invoke('import-menu', {
         body: securePayload,
         headers: {
-          'X-Hotel-ID': userProfile.id,
+          'X-Hotel-ID': userHotelId,
           'X-Timestamp': new Date().toISOString()
         }
       });
@@ -293,7 +326,11 @@ const MenuManagement = ({ hotelId }: MenuManagementProps) => {
       });
       setShowImportDialog(false);
       setSelectedFile(null);
-      setTimeout(() => loadMenuItems(), 2000);
+      setTimeout(() => {
+        if (userHotelId) {
+          loadMenuItems(userHotelId);
+        }
+      }, 2000);
       
     } catch (error: any) {
       console.error('Error uploading file:', error);

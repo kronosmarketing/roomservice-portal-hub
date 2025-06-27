@@ -40,32 +40,42 @@ const EnhancedOrdersLoader = ({
       onLoadingChange(true);
       
       // Verificar autenticación primero
-      const isAuthenticated = await verifyAuthentication();
-      if (!isAuthenticated) {
-        await logSecurityEvent('unauthenticated_orders_access_attempt', 'orders', hotelId);
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('Error de autenticación:', authError);
         showGenericError('verificación de autenticación');
         return;
       }
 
-      // Validar acceso al hotel
-      const hasAccess = await validateUserHotelAccess(hotelId);
-      if (!hasAccess) {
-        await logSecurityEvent('unauthorized_orders_access_attempt', 'orders', hotelId);
-        showGenericError('verificación de permisos');
+      console.log('Usuario autenticado:', user.email);
+
+      // Obtener el hotel_id del usuario actual
+      const { data: userProfile, error: profileError } = await supabase
+        .from('hotel_user_settings')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (profileError || !userProfile) {
+        console.error('Error obteniendo perfil de usuario:', profileError);
+        showGenericError('obtención de perfil');
         return;
       }
 
-      await logSecurityEvent('orders_load_initiated', 'orders', hotelId);
+      console.log('Hotel ID del usuario:', userProfile.id);
 
-      // Cargar pedidos usando RLS (las políticas ya filtran automáticamente)
+      await logSecurityEvent('orders_load_initiated', 'orders', userProfile.id);
+
+      // Cargar pedidos del hotel del usuario
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
+        .eq('hotel_id', userProfile.id)
         .order('created_at', { ascending: false });
 
       if (ordersError) {
         console.error('Error cargando pedidos:', ordersError);
-        await logSecurityEvent('orders_load_error', 'orders', hotelId, { error: ordersError.message });
+        await logSecurityEvent('orders_load_error', 'orders', userProfile.id, { error: ordersError.message });
         showGenericError('carga de pedidos');
         return;
       }
@@ -76,7 +86,6 @@ const EnhancedOrdersLoader = ({
         // Cargar items para cada pedido
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
-            // Los items también están protegidos por RLS
             const { data: orderItems, error: itemsError } = await supabase
               .from('order_items')
               .select(`
@@ -113,7 +122,7 @@ const EnhancedOrdersLoader = ({
           order.items && order.items.trim() !== ''
         );
         
-        await logSecurityEvent('orders_loaded_successfully', 'orders', hotelId, { 
+        await logSecurityEvent('orders_loaded_successfully', 'orders', userProfile.id, { 
           count: validOrders.length 
         });
         
@@ -123,7 +132,7 @@ const EnhancedOrdersLoader = ({
       }
 
       // Cargar estadísticas del día
-      await loadDayStatistics(hotelId);
+      await loadDayStatistics(userProfile.id);
 
     } catch (error) {
       console.error('Error general cargando pedidos:', error);
@@ -136,7 +145,7 @@ const EnhancedOrdersLoader = ({
     }
   };
 
-  const loadDayStatistics = async (hotelId: string) => {
+  const loadDayStatistics = async (userHotelId: string) => {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -146,15 +155,15 @@ const EnhancedOrdersLoader = ({
       const { data: todayOrders, error: statsError } = await supabase
         .from('orders')
         .select('total, status')
+        .eq('hotel_id', userHotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
       if (statsError) {
         console.error('Error cargando estadísticas:', statsError);
-        await logSecurityEvent('stats_load_error', 'orders', hotelId, { 
+        await logSecurityEvent('stats_load_error', 'orders', userHotelId, { 
           error: statsError.message 
         });
-        // No mostrar error al usuario para estadísticas
         return;
       }
 
