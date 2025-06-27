@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Upload } from "lucide-react";
-import { createSecureWebhookPayload } from "@/utils/inputValidation";
 import SecureInputValidation from "./orders/SecureInputValidation";
-import { validateUserHotelAccess, logSecurityEvent, validateFileUpload } from "./orders/securityUtils";
+import { validateUserHotelAccess, logSecurityEvent } from "./orders/securityUtils";
+import { validateFileUpload } from "./orders/security/fileValidation";
 
 interface MenuItem {
   id: string;
@@ -230,10 +229,12 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
         fileType: selectedFile.type
       });
 
-      const securePayload = createSecureWebhookPayload(selectedFile, hotelId);
+      // Crear FormData con el archivo
+      const formData = new FormData();
+      formData.append('file', selectedFile);
       
       const response = await supabase.functions.invoke('import-menu', {
-        body: securePayload,
+        body: formData,
         headers: {
           'X-Hotel-ID': hotelId,
           'X-Timestamp': new Date().toISOString()

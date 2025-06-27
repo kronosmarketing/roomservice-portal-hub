@@ -34,10 +34,7 @@ serve(async (req) => {
   }
 
   try {
-    // Usar la URL del webhook desde las variables de entorno por seguridad
-    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL') || 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
-    
-    console.log('Using webhook URL:', WEBHOOK_URL.substring(0, 50) + '...')
+    console.log('Starting menu import process...')
 
     // Verificar y validar headers de seguridad
     const hotelId = req.headers.get('x-hotel-id')
@@ -97,52 +94,61 @@ serve(async (req) => {
       )
     }
     
+    // Obtener el archivo subido
+    const file = formData.get('file') as File
+    if (!file) {
+      console.error('No file provided')
+      return new Response(
+        JSON.stringify({ error: 'No file provided' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Validar archivos subidos
+    if (file.size > 10 * 1024 * 1024) { // Límite de 10MB
+      console.error('File too large:', file.size)
+      return new Response(
+        JSON.stringify({ error: 'File too large (max 10MB)' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+    
+    // Validar tipos de archivos permitidos
+    const allowedTypes = ['text/csv', 'application/json', 'text/plain', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!allowedTypes.includes(file.type)) {
+      console.error('Invalid file type:', file.type)
+      return new Response(
+        JSON.stringify({ error: 'Invalid file type' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+    
     // Crear FormData para el webhook con validación de seguridad
     const webhookData = new FormData()
     
-    // Copiar y sanitizar campos del formulario
-    for (const [key, value] of formData.entries()) {
-      if (typeof value === 'string') {
-        const sanitizedValue = sanitizeInput(value);
-        if (sanitizedValue) {
-          webhookData.append(key, sanitizedValue);
-        }
-      } else if (value instanceof File) {
-        // Validar archivos subidos
-        if (value.size > 10 * 1024 * 1024) { // Límite de 10MB
-          console.error('File too large:', value.size)
-          return new Response(
-            JSON.stringify({ error: 'File too large (max 10MB)' }),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            }
-          )
-        }
-        
-        // Validar tipos de archivos permitidos
-        const allowedTypes = ['text/csv', 'application/json', 'text/plain', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-        if (!allowedTypes.includes(value.type)) {
-          console.error('Invalid file type:', value.type)
-          return new Response(
-            JSON.stringify({ error: 'Invalid file type' }),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            }
-          )
-        }
-        
-        webhookData.append(key, value);
-      }
-    }
+    // Agregar el archivo
+    webhookData.append('file', file)
     
     // Agregar metadatos de seguridad sanitizados
     webhookData.append('hotelId', sanitizeInput(hotelId))
     webhookData.append('timestamp', sanitizeInput(timestamp))
     webhookData.append('source', 'lovable-app')
 
-    console.log('Sending secure data to webhook')
+    console.log('Preparing to send data to webhook...')
+
+    // URL del webhook - usar la variable de entorno o la URL por defecto
+    const WEBHOOK_URL = Deno.env.get('MENU_IMPORT_WEBHOOK_URL') || 'https://n8n-n8n.mdrxie.easypanel.host/webhook/1a11d6d5-d3bb-4b71-815d-e3bd8b87d118'
+    
+    console.log('Using webhook URL:', WEBHOOK_URL.substring(0, 50) + '...')
 
     // Enviar solicitud al webhook con timeout de seguridad
     const controller = new AbortController()
