@@ -37,14 +37,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state listener with enhanced security
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state change:', event, session?.user?.email);
+        console.log('🔄 Auth state change:', event, session?.user?.email);
         
         if (session?.user) {
           // Perform session integrity check for authenticated users
           try {
             const isValid = await auditSession();
             if (!isValid) {
-              console.warn('Session integrity check failed');
+              console.warn('⚠️ Session integrity check failed');
               await logSecurityEvent('invalid_session_detected', 'auth', null);
               await supabase.auth.signOut();
               setSession(null);
@@ -53,8 +53,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               return;
             }
           } catch (error) {
-            console.error('Session audit failed:', error);
+            console.error('❌ Session audit failed:', error);
           }
+          
+          console.log('✅ Usuario autenticado:', session.user.email);
         }
         
         setSession(session);
@@ -65,6 +67,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 Checking existing session:', session?.user?.email || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -81,11 +84,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       try {
         const isValid = await auditSession();
         if (!isValid) {
-          console.warn('Periodic session check failed - signing out');
+          console.warn('⚠️ Periodic session check failed - signing out');
           await signOut();
         }
       } catch (error) {
-        console.error('Periodic session check error:', error);
+        console.error('❌ Periodic session check error:', error);
       }
     }, 5 * 60 * 1000); // Check every 5 minutes
 
@@ -115,13 +118,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await logSecurityEvent('signup_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
-      console.error('Sign up error:', error);
+      console.error('❌ Sign up error:', error);
       return { error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('🔄 Attempting sign in for:', email);
       await logSecurityEvent('signin_attempt', 'auth', null, { email });
       
       const { error } = await supabase.auth.signInWithPassword({
@@ -130,14 +134,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
       if (error) {
+        console.error('❌ Sign in failed:', error);
         await logSecurityEvent('signin_failed', 'auth', null, { email, error: error.message });
         throw error;
       }
 
+      console.log('✅ Sign in successful for:', email);
       await logSecurityEvent('signin_success', 'auth', null, { email });
       return { error: null };
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error('❌ Sign in error:', error);
       return { error };
     }
   };
@@ -152,7 +158,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await logSecurityEvent('signout_success', 'auth', null);
       return { error: null };
     } catch (error: any) {
-      console.error('Sign out error:', error);
+      console.error('❌ Sign out error:', error);
       return { error };
     }
   };

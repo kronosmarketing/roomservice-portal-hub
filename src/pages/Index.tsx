@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +28,7 @@ const Index = () => {
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (user) {
+      console.log("✅ Usuario autenticado, redirigiendo al dashboard...");
       navigate('/dashboard');
     }
   }, [user, navigate]);
@@ -43,22 +43,24 @@ const Index = () => {
 
     try {
       if (isLogin) {
+        console.log("🔄 Intentando iniciar sesión...");
         const { error } = await signIn(formData.email, formData.password);
 
-        if (error) throw error;
+        if (error) {
+          console.error("❌ Error en login:", error);
+          throw error;
+        }
 
-        toast({
-          title: "¡Bienvenido!",
-          description: "Has iniciado sesión correctamente.",
-        });
-
-        navigate('/dashboard');
+        console.log("✅ Login exitoso, esperando redirección...");
+        // No necesitamos navigate aquí porque useEffect lo manejará
+        
       } else {
         // Validar que las contraseñas coincidan
         if (formData.password !== formData.confirmPassword) {
           throw new Error("Las contraseñas no coinciden");
         }
 
+        console.log("🔄 Intentando registrar usuario...");
         // Registro
         const { data, error } = await supabase.auth.signUp({
           email: formData.email,
@@ -81,6 +83,7 @@ const Index = () => {
         });
       }
     } catch (error: any) {
+      console.error("❌ Error en autenticación:", error);
       toast({
         title: "Error",
         description: error.message || "Ocurrió un error inesperado",
@@ -148,6 +151,7 @@ const Index = () => {
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                 placeholder="admin@hotel.com"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -164,6 +168,7 @@ const Index = () => {
                     className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                     placeholder="Hotel Paradise"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -178,6 +183,7 @@ const Index = () => {
                     className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                     placeholder="Juan Pérez"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -192,6 +198,7 @@ const Index = () => {
                     onChange={(e) => handleInputChange("phoneRoomservice", e.target.value)}
                     className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                     placeholder="+34 123 456 789"
+                    disabled={loading}
                   />
                 </div>
               </>
@@ -209,6 +216,7 @@ const Index = () => {
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                 placeholder="••••••••"
                 required
+                disabled={loading}
               />
             </div>
 
@@ -225,6 +233,7 @@ const Index = () => {
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-12 rounded-xl"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
             )}
