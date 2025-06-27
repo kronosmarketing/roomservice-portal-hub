@@ -68,6 +68,21 @@ const OrderStatusButton = ({ order, onStatusChange }: { order: Order; onStatusCh
   );
 };
 
+const getStatusBadgeColor = (status: string) => {
+  switch (status) {
+    case 'pendiente':
+      return 'bg-yellow-500 text-white border-yellow-500';
+    case 'preparando':
+      return 'bg-blue-500 text-white border-blue-500';
+    case 'completado':
+      return 'bg-green-500 text-white border-green-500';
+    case 'cancelado':
+      return 'bg-red-500 text-white border-red-500';
+    default:
+      return 'bg-gray-500 text-white border-gray-500';
+  }
+};
+
 const OrderCard = ({ 
   order, 
   onStatusChange, 
@@ -141,7 +156,7 @@ const OrderCard = ({
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-3">
-            <Badge variant="outline" className={`${getStatusColor(order.status)} text-xs whitespace-nowrap`}>
+            <Badge className={`${getStatusBadgeColor(order.status)} text-xs whitespace-nowrap`}>
               {getStatusIcon(order.status)}
               {isMobile ? order.status.charAt(0).toUpperCase() : order.status}
             </Badge>
@@ -214,6 +229,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const pendingOrders = orders.filter(order => order.status === 'pendiente');
   const preparingOrders = orders.filter(order => order.status === 'preparando');
   const completedOrders = orders.filter(order => order.status === 'completado');
+  const cancelledOrders = orders.filter(order => order.status === 'cancelado');
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
@@ -728,7 +744,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className={`${isMobile ? 'grid w-full grid-cols-4 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-4'}`}>
+        <TabsList className={`${isMobile ? 'grid w-full grid-cols-5 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-5'}`}>
           <TabsTrigger value="all" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Todos</span> ({orders.length})
@@ -744,6 +760,10 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           <TabsTrigger value="completed" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
             <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Comp.</span> ({completedOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="cancelled" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2">
+            <X className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Canc.</span> ({cancelledOrders.length})
           </TabsTrigger>
         </TabsList>
 
@@ -801,6 +821,22 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
             <p className="text-center text-gray-500 py-8">No hay pedidos completados hoy</p>
           ) : (
             completedOrders.map((order) => (
+              <OrderCard 
+                key={order.id} 
+                order={order} 
+                onStatusChange={handleStatusChange}
+                onCancelOrder={handleCancelOrder}
+                onPrintOrder={handlePrintOrder}
+              />
+            ))
+          )}
+        </TabsContent>
+
+        <TabsContent value="cancelled" className="mt-6">
+          {cancelledOrders.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No hay pedidos cancelados hoy</p>
+          ) : (
+            cancelledOrders.map((order) => (
               <OrderCard 
                 key={order.id} 
                 order={order} 
