@@ -90,29 +90,6 @@ const getStatusBadgeColor = (status: string) => {
   }
 };
 
-const getTabTriggerColor = (status: string, isActive: boolean) => {
-  const baseClasses = "flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all";
-  
-  if (!isActive) {
-    return `${baseClasses} text-gray-600 hover:text-gray-800`;
-  }
-
-  switch (status) {
-    case 'all':
-      return `${baseClasses} bg-slate-100 text-slate-800 border-slate-300`;
-    case 'pending':
-      return `${baseClasses} bg-yellow-100 text-yellow-800 border-yellow-300`;
-    case 'preparing':
-      return `${baseClasses} bg-blue-100 text-blue-800 border-blue-300`;
-    case 'completed':
-      return `${baseClasses} bg-green-100 text-green-800 border-green-300`;
-    case 'cancelled':
-      return `${baseClasses} bg-red-100 text-red-800 border-red-300`;
-    default:
-      return `${baseClasses} bg-gray-100 text-gray-800 border-gray-300`;
-  }
-};
-
 const OrderCard = ({ 
   order, 
   onStatusChange, 
@@ -826,23 +803,38 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
       <Tabs defaultValue="all" className="w-full">
         <TabsList className={`${isMobile ? 'grid w-full grid-cols-5 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-5'}`}>
-          <TabsTrigger value="all" className={getTabTriggerColor('all', true)}>
+          <TabsTrigger 
+            value="all" 
+            className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all data-[state=active]:bg-gray-100 data-[state=active]:text-gray-800 data-[state=active]:border-gray-300"
+          >
             <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Todos</span> ({orders.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className={getTabTriggerColor('pending', false)}>
+          <TabsTrigger 
+            value="pending" 
+            className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800 data-[state=active]:border-yellow-300"
+          >
             <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Pend.</span> ({pendingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="preparing" className={getTabTriggerColor('preparing', false)}>
+          <TabsTrigger 
+            value="preparing" 
+            className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 data-[state=active]:border-blue-300"
+          >
             <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Prep.</span> ({preparingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="completed" className={getTabTriggerColor('completed', false)}>
+          <TabsTrigger 
+            value="completed" 
+            className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all data-[state=active]:bg-green-100 data-[state=active]:text-green-800 data-[state=active]:border-green-300"
+          >
             <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Comp.</span> ({completedOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="cancelled" className={getTabTriggerColor('cancelled', false)}>
+          <TabsTrigger 
+            value="cancelled" 
+            className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap px-2 transition-all data-[state=active]:bg-red-100 data-[state=active]:text-red-800 data-[state=active]:border-red-300"
+          >
             <X className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Canc.</span> ({cancelledOrders.length})
           </TabsTrigger>
