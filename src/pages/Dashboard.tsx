@@ -102,14 +102,20 @@ const Dashboard = () => {
     );
   }
 
-  // Asegurar que siempre tenemos datos mínimos para el dashboard
+  // Usar el ID del perfil del usuario como hotelId (que corresponde al hotel_user_settings.id)
   const dashboardUser = {
     userRole: userProfile?.user_role || 'hotel_manager',
-    hotelId: userProfile?.id || user?.id,
+    hotelId: userProfile?.id || user?.id || '', // Este es el ID correcto para el hotel
     hotelName: userProfile?.hotel_name || 'Mi Hotel',
     agentName: userProfile?.agent_name || 'Agente IA',
     email: userProfile?.email || user?.email
   };
+
+  console.log('🏨 Dashboard User Data:', {
+    hotelId: dashboardUser.hotelId,
+    hotelName: dashboardUser.hotelName,
+    email: dashboardUser.email
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700">
