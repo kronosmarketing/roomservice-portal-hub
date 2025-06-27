@@ -1,11 +1,10 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, DoorClosed, Search, Hash, Copy } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, Hash, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
 import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
@@ -14,7 +13,9 @@ import OrderReportsDialog from "./OrderReportsDialog";
 import DeleteOrderDialog from "./DeleteOrderDialog";
 import DayClosure from "./DayClosure";
 import SearchOrders from "../SearchOrders";
+import MobileActionsMenu from "../mobile/MobileActionsMenu";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface OrdersTabsProps {
   orders: Order[];
@@ -81,6 +82,7 @@ const OrderCard = ({
   showAllActions?: boolean;
 }) => {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const copyOrderId = async (orderId: string) => {
     try {
@@ -104,7 +106,9 @@ const OrderCard = ({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Habitación {sanitizeInput(order.roomNumber)}</CardTitle>
+            <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'}`}>
+              Habitación {sanitizeInput(order.roomNumber)}
+            </CardTitle>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <div className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
@@ -112,13 +116,13 @@ const OrderCard = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1 cursor-pointer group">
-                        <span className="font-mono">
+                        <span className="font-mono text-xs">
                           #{order.id.substring(0, 8)}
                         </span>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => copyOrderId(order.id)}
                         >
                           <Copy className="h-3 w-3" />
@@ -132,15 +136,17 @@ const OrderCard = ({
                 </TooltipProvider>
               </div>
               <span>•</span>
-              <span>{formatTime(order.timestamp)}</span>
+              <span className="text-xs">{formatTime(order.timestamp)}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className={getStatusColor(order.status)}>
+            <Badge variant="outline" className={`${getStatusColor(order.status)} text-xs`}>
               {getStatusIcon(order.status)}
-              {order.status}
+              {isMobile ? order.status.charAt(0).toUpperCase() : order.status}
             </Badge>
-            <span className="text-lg font-bold">{formatPrice(order.total)}</span>
+            <span className={`${isMobile ? 'text-base' : 'text-lg'} font-bold`}>
+              {formatPrice(order.total)}
+            </span>
           </div>
         </div>
       </CardHeader>
@@ -148,7 +154,9 @@ const OrderCard = ({
         <div className="space-y-2 mb-4">
           <div className="flex justify-between items-center">
             <div>
-              <span className="font-medium">{sanitizeInput(order.items)}</span>
+              <span className={`font-medium ${isMobile ? 'text-sm' : ''}`}>
+                {sanitizeInput(order.items)}
+              </span>
             </div>
           </div>
         </div>
@@ -161,11 +169,11 @@ const OrderCard = ({
           </div>
         )}
         
-        <div className="flex justify-between items-center">
+        <div className={`flex ${isMobile ? 'flex-col gap-3' : 'justify-between items-center'}`}>
           <div className="text-sm text-gray-600">
             Método de pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
           </div>
-          <div className="flex gap-2">
+          <div className={`flex gap-2 ${isMobile ? 'flex-wrap' : ''}`}>
             {(showAllActions || order.status !== 'completado') && (
               <OrderStatusButton order={order} onStatusChange={onStatusChange} />
             )}
@@ -176,7 +184,7 @@ const OrderCard = ({
               className="flex items-center gap-1"
             >
               <Printer className="h-4 w-4" />
-              Imprimir
+              {!isMobile && "Imprimir"}
             </Button>
             {order.status !== 'completado' && order.status !== 'cancelado' && (
               <Button
@@ -186,7 +194,7 @@ const OrderCard = ({
                 className="flex items-center gap-1"
               >
                 <X className="h-4 w-4" />
-                Cancelar
+                {!isMobile && "Cancelar"}
               </Button>
             )}
           </div>
@@ -202,6 +210,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   const [showDayClosure, setShowDayClosure] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const pendingOrders = orders.filter(order => order.status === 'pendiente');
   const preparingOrders = orders.filter(order => order.status === 'preparando');
@@ -497,7 +506,6 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
       const { data: todayOrders, error } = await supabase
         .from('orders')
         .select('status, payment_method, total')
-        .eq('hotel_id', hotelId)
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString());
 
@@ -711,65 +719,32 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
   return (
     <div className="space-y-6">
       <div className="flex gap-3 flex-wrap">
-        <Button 
-          onClick={() => setShowReports(true)}
-          variant="outline"
-          className="flex items-center gap-2"
-        >
-          <FileText className="h-4 w-4" />
-          Ver Informes
-        </Button>
-        <Button 
-          onClick={handlePrintDailyReport}
-          variant="outline"
-          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-300"
-        >
-          <span className="font-bold text-blue-600">X</span>
-          Informe X
-        </Button>
-        <Button 
-          onClick={() => setShowDayClosure(true)}
-          variant="outline"
-          className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-300"
-        >
-          <span className="font-bold text-purple-600">Z</span>
-          Cierre Z
-        </Button>
-        <Button 
-          onClick={() => setShowSearch(true)}
-          variant="outline"
-          className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-300"
-        >
-          <Search className="h-4 w-4" />
-          Buscar Pedidos
-        </Button>
-        <Button 
-          onClick={() => setShowDeleteDialog(true)}
-          variant="destructive"
-          className="flex items-center gap-2"
-        >
-          <Trash2 className="h-4 w-4" />
-          Eliminar Pedido
-        </Button>
+        <MobileActionsMenu 
+          onShowReports={() => setShowReports(true)}
+          onPrintDailyReport={handlePrintDailyReport}
+          onShowDayClosure={() => setShowDayClosure(true)}
+          onShowSearch={() => setShowSearch(true)}
+          onShowDeleteDialog={() => setShowDeleteDialog(true)}
+        />
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all" className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Todos ({orders.length})
+        <TabsList className={`${isMobile ? 'grid w-full grid-cols-4 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-4'}`}>
+          <TabsTrigger value="all" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+            <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Todos</span> ({orders.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Pendientes ({pendingOrders.length})
+          <TabsTrigger value="pending" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Pend.</span> ({pendingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="preparing" className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Preparando ({preparingOrders.length})
+          <TabsTrigger value="preparing" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Prep.</span> ({preparingOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4" />
-            Completados ({completedOrders.length})
+          <TabsTrigger value="completed" className="flex items-center gap-1 text-xs sm:text-sm whitespace-nowrap">
+            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Comp.</span> ({completedOrders.length})
           </TabsTrigger>
         </TabsList>
 

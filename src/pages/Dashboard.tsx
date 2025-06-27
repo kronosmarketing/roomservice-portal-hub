@@ -117,27 +117,32 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700">
       {/* Header */}
       <header className="bg-black/20 backdrop-blur-sm border-b border-white/10">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Mic className="h-8 w-8 text-blue-400" />
-            <h1 className="text-2xl font-bold text-white">
-              Marjor<span className="text-orange-500">AI</span>
-            </h1>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <span className="text-white/80">
-              {dashboardUser.hotelName} - {dashboardUser.email}
-            </span>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              size="sm"
-              className="bg-transparent border-white/30 text-white hover:bg-white/10"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Salir
-            </Button>
+        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Mic className="h-6 w-6 sm:h-8 sm:w-8 text-blue-400" />
+              <h1 className="text-lg sm:text-2xl font-bold text-white">
+                Marjor<span className="text-orange-500">AI</span>
+              </h1>
+            </div>
+            
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <span className="text-white/80 text-xs sm:text-sm hidden sm:block">
+                {dashboardUser.hotelName} - {dashboardUser.email}
+              </span>
+              <span className="text-white/80 text-xs sm:hidden">
+                {dashboardUser.hotelName}
+              </span>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="bg-transparent border-white/30 text-white hover:bg-white/10 text-xs sm:text-sm"
+              >
+                <LogOut className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Salir</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>
