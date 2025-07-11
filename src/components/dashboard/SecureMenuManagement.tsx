@@ -304,11 +304,11 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
+                    <TableHead>Disponible</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead>Precio</TableHead>
                     <TableHead>Tiempo (min)</TableHead>
                     <TableHead>Alérgenos</TableHead>
-                    <TableHead>Disponible</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -316,6 +316,12 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                   {menuItems.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={item.available}
+                          onCheckedChange={() => handleAvailabilityToggle(item.id, item.available)}
+                        />
+                      </TableCell>
                       <TableCell className="max-w-xs truncate">{item.description}</TableCell>
                       <TableCell className="text-green-600 font-bold">€{item.price}</TableCell>
                       <TableCell>{item.preparation_time || '-'}</TableCell>
@@ -334,12 +340,6 @@ const SecureMenuManagement = ({ hotelId }: SecureMenuManagementProps) => {
                         ) : (
                           <span className="text-gray-400">Sin alérgenos</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={item.available}
-                          onCheckedChange={() => handleAvailabilityToggle(item.id, item.available)}
-                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
