@@ -51,6 +51,7 @@ interface RecipeIngredient {
   unit_cost: number;
   total_cost: number;
   supplier_product_id?: string;
+  type?: 'manual' | 'supplier';
 }
 
 interface SupplierProduct {
@@ -347,8 +348,78 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     setEditingEscandallo(null);
   };
 
+  const addIngredient = (type: 'manual' | 'supplier' = 'manual') => {
+    console.log('🔄 Añadiendo ingrediente tipo:', type);
+    
+    const newIngredient: RecipeIngredient = {
+      id: `temp-${Date.now()}`,
+      ingredient_name: "",
+      quantity: 1,
+      unit: "g",
+      unit_cost: 0,
+      total_cost: 0,
+      type: type,
+      ...(type === 'supplier' && { supplier_product_id: "" })
+    };
+    
+    console.log('✅ Nuevo ingrediente creado:', newIngredient);
+    
+    setFormData(prev => ({
+      ...prev,
+      ingredients: [...prev.ingredients, newIngredient]
+    }));
+  };
+
+  const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
+    console.log('🔄 Actualizando ingrediente:', { index, field, value });
+    
+    const updatedIngredients = [...formData.ingredients];
+    
+    // Manejo especial para campos numéricos
+    if (field === 'quantity' || field === 'unit_cost') {
+      const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      updatedIngredients[index] = { ...updatedIngredients[index], [field]: numValue };
+      
+      // Solo auto-calcular para ingredientes manuales
+      const isSupplierIngredient = updatedIngredients[index].type === 'supplier';
+      if (!isSupplierIngredient && field === 'unit_cost') {
+        updatedIngredients[index].total_cost = 
+          updatedIngredients[index].quantity * numValue;
+      }
+    } else {
+      updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
+    }
+    
+    console.log('✅ Ingrediente actualizado:', updatedIngredients[index]);
+    
+    setFormData(prev => ({ ...prev, ingredients: updatedIngredients }));
+  };
+
+  const removeIngredient = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== index)
+    }));
+  };
+
+  const toggleAllergen = (allergen: string) => {
+    setFormData(prev => ({
+      ...prev,
+      allergens: prev.allergens.includes(allergen)
+        ? prev.allergens.filter(a => a !== allergen)
+        : [...prev.allergens, allergen]
+    }));
+  };
+
   const handleEdit = (escandallo: Escandallo) => {
     setEditingEscandallo(escandallo);
+    
+    // Ensure ingredients have the type property when editing
+    const ingredientsWithType = escandallo.ingredients?.map(ingredient => ({
+      ...ingredient,
+      type: ingredient.supplier_product_id !== undefined ? 'supplier' as const : 'manual' as const
+    })) || [];
+    
     setFormData({
       name: escandallo.name,
       portions: escandallo.portions,
@@ -357,7 +428,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       image_url: escandallo.image_url || "",
       allergens: escandallo.allergens || [],
       customAllergens: "",
-      ingredients: escandallo.ingredients || [],
+      ingredients: ingredientsWithType,
       recipe_steps: escandallo.recipe_steps || []
     });
     setDialogOpen(true);
@@ -427,67 +498,6 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
         variant: "destructive",
       });
     }
-  };
-
-  const addIngredient = (type: 'manual' | 'supplier' = 'manual') => {
-    console.log('Añadiendo ingrediente tipo:', type);
-    const newIngredient: RecipeIngredient = {
-      id: `temp-${Date.now()}`,
-      ingredient_name: "",
-      quantity: 1,
-      unit: "g",
-      unit_cost: 0,
-      total_cost: 0,
-      ...(type === 'supplier' && { supplier_product_id: "" })
-    };
-    
-    console.log('Nuevo ingrediente creado:', newIngredient);
-    
-    setFormData(prev => ({
-      ...prev,
-      ingredients: [...prev.ingredients, newIngredient]
-    }));
-  };
-
-  const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
-    console.log('Actualizando ingrediente:', { index, field, value });
-    
-    const updatedIngredients = [...formData.ingredients];
-    
-    // Manejo especial para campos numéricos
-    if (field === 'quantity' || field === 'unit_cost') {
-      const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
-      updatedIngredients[index] = { ...updatedIngredients[index], [field]: numValue };
-      
-      // Solo auto-calcular para ingredientes manuales
-      const isSupplierIngredient = updatedIngredients[index].supplier_product_id !== undefined;
-      if (!isSupplierIngredient && field === 'unit_cost') {
-        updatedIngredients[index].total_cost = 
-          updatedIngredients[index].quantity * numValue;
-      }
-    } else {
-      updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
-    }
-    
-    console.log('Ingrediente actualizado:', updatedIngredients[index]);
-    
-    setFormData(prev => ({ ...prev, ingredients: updatedIngredients }));
-  };
-
-  const removeIngredient = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      ingredients: prev.ingredients.filter((_, i) => i !== index)
-    }));
-  };
-
-  const toggleAllergen = (allergen: string) => {
-    setFormData(prev => ({
-      ...prev,
-      allergens: prev.allergens.includes(allergen)
-        ? prev.allergens.filter(a => a !== allergen)
-        : [...prev.allergens, allergen]
-    }));
   };
 
   if (loading) {

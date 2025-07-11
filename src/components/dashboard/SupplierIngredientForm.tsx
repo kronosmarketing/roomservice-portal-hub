@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Calculator } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface RecipeIngredient {
   id: string;
@@ -15,6 +15,7 @@ interface RecipeIngredient {
   unit_cost: number;
   total_cost: number;
   supplier_product_id?: string;
+  type?: 'manual' | 'supplier'; // Add type property
 }
 
 interface SupplierProduct {
@@ -67,35 +68,59 @@ const SupplierIngredientForm = ({
   onRemove 
 }: SupplierIngredientFormProps) => {
   // Estados locales para manejo de inputs temporalmente vacíos
-  const [tempQuantity, setTempQuantity] = useState<string>(ingredient.quantity?.toString() || '');
-  const [tempUnitCost, setTempUnitCost] = useState<string>(ingredient.unit_cost?.toString() || '');
+  const [tempQuantity, setTempQuantity] = useState<string>(ingredient.quantity?.toString() || '1');
+  const [tempUnitCost, setTempUnitCost] = useState<string>(ingredient.unit_cost?.toString() || '0');
 
-  const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
+  // CORRECCIÓN CRÍTICA: Usar la propiedad type para detectar correctamente ingredientes de proveedor
+  const isSupplierIngredient = ingredient.type === 'supplier';
   
-  // CORRECCIÓN CRÍTICA: Detectar correctamente ingredientes de proveedor
-  const isSupplierIngredient = ingredient.supplier_product_id !== undefined;
+  const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
 
   console.log('SupplierIngredientForm Debug:', {
     ingredientId: ingredient.id,
+    type: ingredient.type,
     supplier_product_id: ingredient.supplier_product_id,
     isSupplierIngredient,
-    selectedProduct: selectedProduct?.name
+    selectedProduct: selectedProduct?.name || 'No seleccionado',
+    quantity: ingredient.quantity,
+    unit: ingredient.unit
   });
 
+  // Sincronizar estados locales cuando el ingrediente cambie
+  useEffect(() => {
+    setTempQuantity(ingredient.quantity?.toString() || '1');
+    setTempUnitCost(ingredient.unit_cost?.toString() || '0');
+  }, [ingredient.quantity, ingredient.unit_cost]);
+
   const handleSupplierProductChange = (productId: string) => {
-    console.log('Seleccionando producto:', productId);
+    console.log('🔄 Seleccionando producto:', productId);
     const product = supplierProducts.find(p => p.id === productId);
+    
     if (product) {
+      console.log('📦 Producto encontrado:', {
+        name: product.name,
+        price: product.price,
+        package_size: product.package_size,
+        unit: product.unit,
+        supplier: product.supplier.name
+      });
+
+      // Actualizar todos los campos de forma atómica
       onUpdate(index, 'supplier_product_id', productId);
       onUpdate(index, 'ingredient_name', product.name);
       onUpdate(index, 'unit', product.unit);
-      calculateCost(ingredient.quantity, product.unit, product);
+      
+      // Calcular costo inmediatamente después de la actualización
+      setTimeout(() => {
+        calculateCost(ingredient.quantity, product.unit, product);
+      }, 0);
     }
   };
 
   const calculateCost = (quantity: number, unit: string, product?: SupplierProduct) => {
     const currentProduct = product || selectedProduct;
     if (!currentProduct || !quantity || quantity <= 0) {
+      console.log('❌ No se puede calcular costo:', { currentProduct: !!currentProduct, quantity });
       onUpdate(index, 'unit_cost', 0);
       onUpdate(index, 'total_cost', 0);
       return;
@@ -107,7 +132,7 @@ const SupplierIngredientForm = ({
 
     if (!usedUnitConversion || !packageUnitConversion || 
         usedUnitConversion.baseUnit !== packageUnitConversion.baseUnit) {
-      // Can't convert between different base units (weight vs volume)
+      console.log('❌ No se puede convertir entre unidades incompatibles');
       onUpdate(index, 'unit_cost', 0);
       onUpdate(index, 'total_cost', 0);
       return;
@@ -125,6 +150,15 @@ const SupplierIngredientForm = ({
     // Calculate total cost
     const totalCost = usedQuantityInBaseUnit * pricePerBaseUnit;
     
+    console.log('💰 Cálculo de costo:', {
+      quantity,
+      unit,
+      usedQuantityInBaseUnit,
+      packageSizeInBaseUnit,
+      pricePerBaseUnit,
+      totalCost
+    });
+    
     onUpdate(index, 'unit_cost', pricePerBaseUnit);
     onUpdate(index, 'total_cost', totalCost);
   };
@@ -135,26 +169,27 @@ const SupplierIngredientForm = ({
   };
 
   const handleQuantityBlur = () => {
-    const numValue = tempQuantity === '' ? 0 : parseFloat(tempQuantity);
+    const numValue = tempQuantity === '' ? 1 : parseFloat(tempQuantity);
     if (!isNaN(numValue) && numValue >= 0) {
       onUpdate(index, 'quantity', numValue);
-      if (isSupplierIngredient) {
+      if (isSupplierIngredient && selectedProduct) {
         calculateCost(numValue, ingredient.unit);
-      } else {
+      } else if (!isSupplierIngredient) {
         // Para ingredientes manuales, recalcular costo total
         const totalCost = numValue * ingredient.unit_cost;
         onUpdate(index, 'total_cost', totalCost);
       }
     } else {
-      setTempQuantity(ingredient.quantity?.toString() || '0');
+      setTempQuantity('1');
+      onUpdate(index, 'quantity', 1);
     }
   };
 
   const handleUnitChange = (unit: string) => {
     onUpdate(index, 'unit', unit);
-    if (isSupplierIngredient) {
+    if (isSupplierIngredient && selectedProduct) {
       calculateCost(ingredient.quantity, unit);
-    } else {
+    } else if (!isSupplierIngredient) {
       // Para ingredientes manuales, solo recalcular costo total
       const totalCost = ingredient.quantity * ingredient.unit_cost;
       onUpdate(index, 'total_cost', totalCost);
@@ -173,7 +208,8 @@ const SupplierIngredientForm = ({
       const totalCost = ingredient.quantity * numValue;
       onUpdate(index, 'total_cost', totalCost);
     } else {
-      setTempUnitCost(ingredient.unit_cost?.toString() || '0');
+      setTempUnitCost('0');
+      onUpdate(index, 'unit_cost', 0);
     }
   };
 
@@ -245,7 +281,7 @@ const SupplierIngredientForm = ({
           )}
         </div>
 
-        {selectedProduct && (
+        {selectedProduct && isSupplierIngredient && (
           <div className="grid grid-cols-2 gap-4 p-3 bg-blue-100 rounded-lg">
             <div>
               <Label className="text-xs text-gray-600">Producto Seleccionado</Label>
@@ -276,7 +312,7 @@ const SupplierIngredientForm = ({
               value={tempQuantity}
               onChange={handleQuantityChange}
               onBlur={handleQuantityBlur}
-              placeholder="0"
+              placeholder="1"
             />
           </div>
 
@@ -312,7 +348,7 @@ const SupplierIngredientForm = ({
           )}
         </div>
 
-        {selectedProduct && ingredient.quantity > 0 && (
+        {selectedProduct && isSupplierIngredient && ingredient.quantity > 0 && (
           <Card className="bg-green-50 border-green-200">
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-2">
