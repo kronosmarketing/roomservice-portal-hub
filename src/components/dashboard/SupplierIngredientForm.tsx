@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,20 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Calculator } from "lucide-react";
 import { useState, useEffect } from "react";
-
-interface RecipeIngredient {
-  id: string;
-  ingredient_name: string;
-  quantity: number;
-  unit: string;
-  unit_cost: number;
-  total_cost: number;
-  supplier_product_id?: string;
-  type: 'manual' | 'supplier';
-  // Campos adicionales para ingredientes manuales
-  package_quantity?: number;
-  package_price?: number;
-}
+import { RecipeIngredient } from "./orders/types";
 
 interface SupplierProduct {
   id: string;

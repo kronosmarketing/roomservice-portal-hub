@@ -18,6 +18,7 @@ import RecipeDetailView from "./RecipeDetailView";
 import RecipeStepsManager from "./RecipeStepsManager";
 import SupplierIngredientForm from "./SupplierIngredientForm";
 import PublishToMenuDialog from "./PublishToMenuDialog";
+import { RecipeIngredient } from "./orders/types";
 
 interface RecipeStep {
   id: string;
@@ -41,17 +42,6 @@ interface Escandallo {
   created_at: string;
   ingredients: RecipeIngredient[];
   recipe_steps?: RecipeStep[];
-}
-
-interface RecipeIngredient {
-  id: string;
-  ingredient_name: string;
-  quantity: number;
-  unit: string;
-  unit_cost: number;
-  total_cost: number;
-  supplier_product_id?: string;
-  type?: 'manual' | 'supplier';
 }
 
 interface SupplierProduct {

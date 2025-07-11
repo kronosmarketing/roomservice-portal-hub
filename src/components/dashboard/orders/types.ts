@@ -28,3 +28,17 @@ export interface OrderItem {
     price: number;
   };
 }
+
+export interface RecipeIngredient {
+  id: string;
+  ingredient_name: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+  total_cost: number;
+  supplier_product_id?: string;
+  type: 'manual' | 'supplier';
+  // Additional fields for manual ingredients
+  package_quantity?: number;
+  package_price?: number;
+}
