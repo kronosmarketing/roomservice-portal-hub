@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,7 +113,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
             unit,
             unit_cost,
             total_cost,
-            supplier_product_id
+            supplier_product_id,
+            package_quantity,
+            price_unit
           ),
           recipe_steps (
             id,
@@ -129,10 +132,15 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
 
       const processedData = data?.map(item => ({
         ...item,
-        ingredients: item.recipe_ingredients || [],
+        ingredients: item.recipe_ingredients?.map((ingredient: any) => ({
+          ...ingredient,
+          type: ingredient.supplier_product_id ? 'supplier' as const : 'manual' as const,
+          package_price: ingredient.package_quantity ? (ingredient.unit_cost * ingredient.package_quantity) : 0
+        })) || [],
         recipe_steps: item.recipe_steps || []
       })) || [];
 
+      console.log('📊 Escandallos cargados:', processedData);
       setEscandallos(processedData);
     } catch (error) {
       console.error('Error loading escandallos:', error);
@@ -263,7 +271,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           unit: ing.unit,
           unit_cost: ing.unit_cost,
           total_cost: ing.total_cost,
-          supplier_product_id: ing.supplier_product_id || null
+          supplier_product_id: ing.supplier_product_id || null,
+          package_quantity: ing.package_quantity || 1,
+          price_unit: ing.unit
         }));
 
         const { error: ingredientsError } = await supabase
