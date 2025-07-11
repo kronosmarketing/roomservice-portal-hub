@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Calculator, DollarSign, Eye, Send, Package, ChefHat } from "lucide-react";
+import { Plus, Edit, Trash2, Calculator, Eye, Send, Package, ChefHat } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import ImageUpload from "./ImageUpload";
 import RecipeDetailView from "./RecipeDetailView";
 import RecipeStepsManager from "./RecipeStepsManager";
@@ -496,7 +495,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               Nuevo Escandallo
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingEscandallo ? 'Editar Escandallo' : 'Nuevo Escandallo'}
@@ -506,159 +505,164 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               </DialogDescription>
             </DialogHeader>
             
-            <form onSubmit={handleSubmit}>
-              <Tabs defaultValue="general" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="general">General</TabsTrigger>
-                  <TabsTrigger value="ingredients">Ingredientes</TabsTrigger>
-                  <TabsTrigger value="steps">Pasos</TabsTrigger>
-                  <TabsTrigger value="allergens">Alérgenos</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="general" className="space-y-4 mt-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Nombre del Escandallo</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="portions">Porciones</Label>
-                      <Input
-                        id="portions"
-                        type="number"
-                        min="1"
-                        value={formData.portions}
-                        onChange={(e) => setFormData(prev => ({ ...prev, portions: parseInt(e.target.value) }))}
-                        required
-                      />
-                    </div>
-                  </div>
-
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* General Information Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Información General</h3>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="menu_item">Plato del Menú (Opcional)</Label>
-                    <Select value={formData.menu_item_id} onValueChange={(value) => setFormData(prev => ({ ...prev, menu_item_id: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar plato" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {menuItems.map(item => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name} - €{item.price}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="notes">Notas</Label>
-                    <Textarea
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Notas adicionales sobre la receta..."
+                    <Label htmlFor="name">Nombre del Escandallo</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      required
                     />
                   </div>
-
-                  <ImageUpload
-                    currentImageUrl={formData.image_url}
-                    onImageUploaded={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
-                    onImageRemoved={() => setFormData(prev => ({ ...prev, image_url: "" }))}
-                  />
-                </TabsContent>
-
-                <TabsContent value="ingredients" className="space-y-4 mt-6">
-                  <div className="flex items-center justify-between">
-                    <Label>Ingredientes</Label>
-                    <div className="flex gap-2">
-                      <Button type="button" onClick={() => addIngredient('manual')} size="sm" variant="outline">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Manual
-                      </Button>
-                      <Button type="button" onClick={() => addIngredient('supplier')} size="sm">
-                        <Package className="h-4 w-4 mr-2" />
-                        Desde Proveedor
-                      </Button>
-                    </div>
+                  <div>
+                    <Label htmlFor="portions">Porciones</Label>
+                    <Input
+                      id="portions"
+                      type="number"
+                      min="1"
+                      value={formData.portions}
+                      onChange={(e) => setFormData(prev => ({ ...prev, portions: parseInt(e.target.value) }))}
+                      required
+                    />
                   </div>
-                  
-                  <div className="space-y-4">
-                    {formData.ingredients.map((ingredient, index) => (
-                      <SupplierIngredientForm
-                        key={ingredient.id}
-                        ingredient={ingredient}
-                        index={index}
-                        supplierProducts={supplierProducts}
-                        onUpdate={updateIngredient}
-                        onRemove={removeIngredient}
-                      />
+                </div>
+
+                <div>
+                  <Label htmlFor="menu_item">Plato del Menú (Opcional)</Label>
+                  <Select value={formData.menu_item_id} onValueChange={(value) => setFormData(prev => ({ ...prev, menu_item_id: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar plato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {menuItems.map(item => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} - €{item.price}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="notes">Notas</Label>
+                  <Textarea
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Notas adicionales sobre la receta..."
+                  />
+                </div>
+
+                <ImageUpload
+                  currentImageUrl={formData.image_url}
+                  onImageUploaded={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+                  onImageRemoved={() => setFormData(prev => ({ ...prev, image_url: "" }))}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Ingredients Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Ingredientes</h3>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={() => addIngredient('manual')} size="sm" variant="outline">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Manual
+                    </Button>
+                    <Button type="button" onClick={() => addIngredient('supplier')} size="sm">
+                      <Package className="h-4 w-4 mr-2" />
+                      Desde Proveedor
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {formData.ingredients.map((ingredient, index) => (
+                    <SupplierIngredientForm
+                      key={ingredient.id}
+                      ingredient={ingredient}
+                      index={index}
+                      supplierProducts={supplierProducts}
+                      onUpdate={updateIngredient}
+                      onRemove={removeIngredient}
+                    />
+                  ))}
+                </div>
+
+                {formData.ingredients.length > 0 && (
+                  <Card className="bg-gray-50">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Costo Total:</span>
+                        <span className="text-lg font-bold">
+                          €{formData.ingredients.reduce((sum, ing) => sum + ing.total_cost, 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Recipe Steps Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Pasos de Preparación</h3>
+                <RecipeStepsManager
+                  steps={formData.recipe_steps}
+                  onStepsChange={(steps) => setFormData(prev => ({ ...prev, recipe_steps: steps }))}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Allergens Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Alérgenos</h3>
+                
+                <div>
+                  <Label>Alérgenos Predefinidos</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto border rounded-lg p-3">
+                    {ALLERGENS_OPTIONS.map((allergen) => (
+                      <div key={allergen} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={allergen}
+                          checked={formData.allergens.includes(allergen)}
+                          onCheckedChange={() => toggleAllergen(allergen)}
+                        />
+                        <Label
+                          htmlFor={allergen}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {allergen}
+                        </Label>
+                      </div>
                     ))}
                   </div>
+                </div>
 
-                  {formData.ingredients.length > 0 && (
-                    <Card className="bg-gray-50">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">Costo Total:</span>
-                          <span className="text-lg font-bold">
-                            €{formData.ingredients.reduce((sum, ing) => sum + ing.total_cost, 0).toFixed(2)}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="steps" className="space-y-4 mt-6">
-                  <RecipeStepsManager
-                    steps={formData.recipe_steps}
-                    onStepsChange={(steps) => setFormData(prev => ({ ...prev, recipe_steps: steps }))}
+                <div>
+                  <Label htmlFor="customAllergens">Alérgenos Personalizados</Label>
+                  <Input
+                    id="customAllergens"
+                    value={formData.customAllergens}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customAllergens: e.target.value }))}
+                    placeholder="Ej: Miel, Quinoa, Coco (separados por comas)"
                   />
-                </TabsContent>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Separar múltiples alérgenos con comas
+                  </p>
+                </div>
+              </div>
 
-                <TabsContent value="allergens" className="space-y-4 mt-6">
-                  <div>
-                    <Label>Alérgenos Predefinidos</Label>
-                    <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto border rounded-lg p-3">
-                      {ALLERGENS_OPTIONS.map((allergen) => (
-                        <div key={allergen} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={allergen}
-                            checked={formData.allergens.includes(allergen)}
-                            onCheckedChange={() => toggleAllergen(allergen)}
-                          />
-                          <Label
-                            htmlFor={allergen}
-                            className="text-sm font-normal cursor-pointer"
-                          >
-                            {allergen}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="customAllergens">Alérgenos Personalizados</Label>
-                    <Input
-                      id="customAllergens"
-                      value={formData.customAllergens}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customAllergens: e.target.value }))}
-                      placeholder="Ej: Miel, Quinoa, Coco (separados por comas)"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Separar múltiples alérgenos con comas
-                    </p>
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancelar
                 </Button>

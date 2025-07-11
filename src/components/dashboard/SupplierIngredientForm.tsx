@@ -1,10 +1,9 @@
 
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Calculator } from "lucide-react";
 
 interface RecipeIngredient {
@@ -38,268 +37,240 @@ interface SupplierIngredientFormProps {
 }
 
 const UNIT_OPTIONS = [
-  { value: "g", label: "Gramos (g)" },
-  { value: "kg", label: "Kilogramos (kg)" },
-  { value: "ml", label: "Mililitros (ml)" },
-  { value: "l", label: "Litros (l)" },
-  { value: "ud", label: "Unidades (ud)" },
-  { value: "cups", label: "Tazas" },
-  { value: "tbsp", label: "Cucharadas" },
-  { value: "tsp", label: "Cucharaditas" }
+  { value: 'g', label: 'Gramos (g)' },
+  { value: 'kg', label: 'Kilogramos (kg)' },
+  { value: 'ml', label: 'Mililitros (ml)' },
+  { value: 'l', label: 'Litros (l)' },
+  { value: 'pcs', label: 'Piezas (pcs)' },
+  { value: 'tsp', label: 'Cucharaditas (tsp)' },
+  { value: 'tbsp', label: 'Cucharadas (tbsp)' },
+  { value: 'cup', label: 'Tazas (cup)' }
 ];
 
-const UNIT_CONVERSIONS: { [key: string]: { [key: string]: number } } = {
-  "kg": { "g": 1000 },
-  "g": { "kg": 0.001 },
-  "l": { "ml": 1000 },
-  "ml": { "l": 0.001 }
+// Conversion factors to base units (grams for weight, ml for volume)
+const CONVERSION_FACTORS: { [key: string]: { factor: number; baseUnit: string } } = {
+  'g': { factor: 1, baseUnit: 'g' },
+  'kg': { factor: 1000, baseUnit: 'g' },
+  'ml': { factor: 1, baseUnit: 'ml' },
+  'l': { factor: 1000, baseUnit: 'ml' },
+  'tsp': { factor: 5, baseUnit: 'ml' },
+  'tbsp': { factor: 15, baseUnit: 'ml' },
+  'cup': { factor: 240, baseUnit: 'ml' }
 };
 
-const SupplierIngredientForm = ({ ingredient, index, supplierProducts, onUpdate, onRemove }: SupplierIngredientFormProps) => {
-  const [selectedProduct, setSelectedProduct] = useState<SupplierProduct | null>(null);
-  const [usedQuantity, setUsedQuantity] = useState<number>(ingredient.quantity);
-  const [usedUnit, setUsedUnit] = useState<string>(ingredient.unit);
-  const [conversionInfo, setConversionInfo] = useState<string>("");
+const SupplierIngredientForm = ({ 
+  ingredient, 
+  index, 
+  supplierProducts, 
+  onUpdate, 
+  onRemove 
+}: SupplierIngredientFormProps) => {
+  const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
+  const isSupplierIngredient = Boolean(ingredient.supplier_product_id);
 
-  useEffect(() => {
-    if (ingredient.supplier_product_id) {
-      const product = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
-      setSelectedProduct(product || null);
+  const handleSupplierProductChange = (productId: string) => {
+    const product = supplierProducts.find(p => p.id === productId);
+    if (product) {
+      onUpdate(index, 'supplier_product_id', productId);
+      onUpdate(index, 'ingredient_name', product.name);
+      onUpdate(index, 'unit', product.unit);
+      calculateCost(ingredient.quantity, ingredient.unit, product);
     }
-  }, [ingredient.supplier_product_id, supplierProducts]);
+  };
 
-  useEffect(() => {
-    if (selectedProduct && usedQuantity && usedUnit) {
-      calculateCost();
-    }
-  }, [selectedProduct, usedQuantity, usedUnit]);
-
-  const calculateCost = () => {
-    if (!selectedProduct) return;
-
-    const packageUnit = selectedProduct.unit;
-    const packageSize = selectedProduct.package_size;
-    const packagePrice = selectedProduct.price;
-
-    let finalQuantity = usedQuantity;
-    let conversionText = "";
-
-    // Apply unit conversion if needed
-    if (usedUnit !== packageUnit && UNIT_CONVERSIONS[usedUnit]?.[packageUnit]) {
-      const conversionFactor = UNIT_CONVERSIONS[usedUnit][packageUnit];
-      finalQuantity = usedQuantity * conversionFactor;
-      conversionText = `${usedQuantity} ${usedUnit} → ${finalQuantity} ${packageUnit}`;
-      setConversionInfo(conversionText);
-    } else if (usedUnit === packageUnit) {
-      setConversionInfo(`${usedQuantity} ${usedUnit} (sin conversión)`);
-    } else {
-      setConversionInfo("⚠️ Unidades incompatibles");
+  const calculateCost = (quantity: number, unit: string, product?: SupplierProduct) => {
+    const currentProduct = product || selectedProduct;
+    if (!currentProduct || !quantity) {
+      onUpdate(index, 'unit_cost', 0);
+      onUpdate(index, 'total_cost', 0);
       return;
     }
 
-    // Calculate unit cost and total cost
-    const unitCost = packagePrice / packageSize;
-    const totalCost = finalQuantity * unitCost;
+    // Get conversion factors
+    const usedUnitConversion = CONVERSION_FACTORS[unit];
+    const packageUnitConversion = CONVERSION_FACTORS[currentProduct.unit];
 
-    onUpdate(index, 'quantity', usedQuantity);
-    onUpdate(index, 'unit', usedUnit);
-    onUpdate(index, 'unit_cost', unitCost);
+    if (!usedUnitConversion || !packageUnitConversion || 
+        usedUnitConversion.baseUnit !== packageUnitConversion.baseUnit) {
+      // Can't convert between different base units (weight vs volume)
+      onUpdate(index, 'unit_cost', 0);
+      onUpdate(index, 'total_cost', 0);
+      return;
+    }
+
+    // Convert used quantity to base unit
+    const usedQuantityInBaseUnit = quantity * usedUnitConversion.factor;
+    
+    // Convert package size to base unit
+    const packageSizeInBaseUnit = currentProduct.package_size * packageUnitConversion.factor;
+    
+    // Calculate unit cost (price per base unit)
+    const pricePerBaseUnit = currentProduct.price / packageSizeInBaseUnit;
+    
+    // Calculate total cost
+    const totalCost = usedQuantityInBaseUnit * pricePerBaseUnit;
+    
+    onUpdate(index, 'unit_cost', pricePerBaseUnit);
     onUpdate(index, 'total_cost', totalCost);
   };
 
-  const handleProductSelect = (productId: string) => {
-    const product = supplierProducts.find(p => p.id === productId);
-    if (product) {
-      setSelectedProduct(product);
-      onUpdate(index, 'supplier_product_id', productId);
-      onUpdate(index, 'ingredient_name', product.name);
-      setUsedUnit(product.unit); // Default to package unit
-    }
+  const handleQuantityChange = (quantity: number) => {
+    onUpdate(index, 'quantity', quantity);
+    calculateCost(quantity, ingredient.unit);
   };
 
-  const isSupplierIngredient = ingredient.supplier_product_id !== undefined;
+  const handleUnitChange = (unit: string) => {
+    onUpdate(index, 'unit', unit);
+    calculateCost(ingredient.quantity, unit);
+  };
 
-  if (isSupplierIngredient) {
-    return (
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-blue-800">
-              Ingrediente de Proveedor
-            </CardTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onRemove(index)}
-              className="text-red-600 hover:text-red-800"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Producto de Proveedor</Label>
-            <Select value={ingredient.supplier_product_id || ""} onValueChange={handleProductSelect}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar producto" />
-              </SelectTrigger>
-              <SelectContent>
-                {supplierProducts.map(product => (
-                  <SelectItem key={product.id} value={product.id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{product.name}</span>
-                      <span className="text-xs text-gray-500">
-                        {product.supplier.name} - Ref: {product.reference || 'N/A'}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+  const getConversionDisplay = () => {
+    if (!selectedProduct || !ingredient.quantity) return null;
 
-          {selectedProduct && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Cantidad del Paquete</Label>
-                  <Input
-                    value={`${selectedProduct.package_size} ${selectedProduct.unit}`}
-                    readOnly
-                    className="bg-gray-100 text-gray-600"
-                  />
-                </div>
-                <div>
-                  <Label>Precio del Paquete</Label>
-                  <Input
-                    value={`€${selectedProduct.price.toFixed(2)}`}
-                    readOnly
-                    className="bg-gray-100 text-gray-600"
-                  />
-                </div>
-              </div>
+    const usedUnitConversion = CONVERSION_FACTORS[ingredient.unit];
+    const packageUnitConversion = CONVERSION_FACTORS[selectedProduct.unit];
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Cantidad Usada</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={usedQuantity}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
-                      setUsedQuantity(value);
-                    }}
-                    className="font-medium"
-                  />
-                </div>
-                <div>
-                  <Label>Unidad</Label>
-                  <Select value={usedUnit} onValueChange={setUsedUnit}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UNIT_OPTIONS.map(unit => (
-                        <SelectItem key={unit.value} value={unit.value}>
-                          {unit.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+    if (!usedUnitConversion || !packageUnitConversion || 
+        usedUnitConversion.baseUnit !== packageUnitConversion.baseUnit) {
+      return "No se puede convertir entre unidades incompatibles";
+    }
 
-              <Card className="bg-green-50 border-green-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-green-800 flex items-center gap-2">
-                    <Calculator className="h-4 w-4" />
-                    Cálculo de Costo (con conversión)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-sm">
-                    <span className="text-gray-600">Conversión: </span>
-                    <span className="font-medium">{conversionInfo}</span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="text-gray-600">Precio base: </span>
-                    <span className="font-medium">€{(selectedProduct.price / selectedProduct.package_size).toFixed(4)}/{selectedProduct.unit}</span>
-                  </div>
-                  <div className="text-lg font-bold text-green-700">
-                    Costo Total: €{ingredient.total_cost.toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+    const usedQuantityInBaseUnit = ingredient.quantity * usedUnitConversion.factor;
+    const packageSizeInBaseUnit = selectedProduct.package_size * packageUnitConversion.factor;
+    const ratio = usedQuantityInBaseUnit / packageSizeInBaseUnit;
 
-  // Manual ingredient (original layout)
+    return `${ingredient.quantity} ${ingredient.unit} → ${usedQuantityInBaseUnit} ${usedUnitConversion.baseUnit} = ${ratio.toFixed(4)} del paquete`;
+  };
+
   return (
-    <Card className="border-gray-200">
-      <CardContent className="p-4">
-        <div className="grid grid-cols-6 gap-2 items-end">
-          <div>
-            <Label>Ingrediente</Label>
-            <Input
-              value={ingredient.ingredient_name}
-              onChange={(e) => onUpdate(index, 'ingredient_name', e.target.value)}
-              placeholder="Nombre del ingrediente"
-            />
+    <Card className={`${isSupplierIngredient ? 'border-blue-200 bg-blue-50' : 'border-gray-200'}`}>
+      <CardContent className="p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-sm">
+            {isSupplierIngredient ? 'Ingrediente de Proveedor' : 'Ingrediente Manual'}
+          </h4>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onRemove(index)}
+            className="text-red-600 hover:text-red-800"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isSupplierIngredient ? (
+            <div className="md:col-span-2">
+              <Label>Producto de Proveedor</Label>
+              <Select value={ingredient.supplier_product_id || ''} onValueChange={handleSupplierProductChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar producto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {supplierProducts.map(product => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name} - {product.supplier.name} (€{product.price}/{product.package_size}{product.unit})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <Label>Nombre del Ingrediente</Label>
+              <Input
+                value={ingredient.ingredient_name}
+                onChange={(e) => onUpdate(index, 'ingredient_name', e.target.value)}
+                placeholder="Ej: Harina de trigo"
+              />
+            </div>
+          )}
+        </div>
+
+        {selectedProduct && (
+          <div className="grid grid-cols-2 gap-4 p-3 bg-blue-100 rounded-lg">
+            <div>
+              <Label className="text-xs text-gray-600">Cantidad del Paquete</Label>
+              <p className="font-medium">{selectedProduct.package_size} {selectedProduct.unit}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Precio del Paquete</Label>
+              <p className="font-medium">€{selectedProduct.price.toFixed(2)}</p>
+            </div>
           </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>Cantidad</Label>
+            <Label>Cantidad Usada</Label>
             <Input
               type="number"
               step="0.01"
+              min="0"
               value={ingredient.quantity}
-              onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleQuantityChange(parseFloat(e.target.value) || 0)}
             />
           </div>
+
           <div>
             <Label>Unidad</Label>
-            <Select value={ingredient.unit} onValueChange={(value) => onUpdate(index, 'unit', value)}>
+            <Select value={ingredient.unit} onValueChange={handleUnitChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {UNIT_OPTIONS.map(unit => (
-                  <SelectItem key={unit.value} value={unit.value}>
-                    {unit.label}
+                {UNIT_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Precio/Unidad (€)</Label>
-            <Input
-              type="number"
-              step="0.001"
-              value={ingredient.unit_cost}
-              onChange={(e) => onUpdate(index, 'unit_cost', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="text-sm font-medium">
-              €{ingredient.total_cost.toFixed(2)}
+
+          {!isSupplierIngredient && (
+            <div>
+              <Label>Costo Unitario (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={ingredient.unit_cost}
+                onChange={(e) => onUpdate(index, 'unit_cost', parseFloat(e.target.value) || 0)}
+              />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onRemove(index)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          )}
         </div>
+
+        {selectedProduct && ingredient.quantity > 0 && (
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Calculator className="h-4 w-4 text-green-600" />
+                <span className="font-medium text-green-800">Cálculo de Costo (con conversión)</span>
+              </div>
+              
+              <div className="text-sm space-y-1 text-green-700">
+                <p><strong>Conversión:</strong> {getConversionDisplay()}</p>
+                <p><strong>Precio base:</strong> €{(ingredient.unit_cost || 0).toFixed(4)}/{ingredient.unit}</p>
+              </div>
+              
+              <div className="mt-2 text-lg font-bold text-green-800">
+                Costo Total: €{ingredient.total_cost.toFixed(2)}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isSupplierIngredient && (
+          <div className="text-right">
+            <span className="text-lg font-semibold">
+              Total: €{ingredient.total_cost.toFixed(2)}
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
