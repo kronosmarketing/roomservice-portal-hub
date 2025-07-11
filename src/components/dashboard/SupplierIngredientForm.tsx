@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,7 +74,7 @@ const SupplierIngredientForm = ({
       onUpdate(index, 'supplier_product_id', productId);
       onUpdate(index, 'ingredient_name', product.name);
       onUpdate(index, 'unit', product.unit);
-      calculateCost(ingredient.quantity, ingredient.unit, product);
+      calculateCost(ingredient.quantity, product.unit, product);
     }
   };
 

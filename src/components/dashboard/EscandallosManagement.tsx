@@ -437,7 +437,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       unit: "g",
       unit_cost: 0,
       total_cost: 0,
-      supplier_product_id: type === 'supplier' ? null : undefined
+      supplier_product_id: type === 'supplier' ? "" : undefined
     };
     setFormData(prev => ({
       ...prev,
