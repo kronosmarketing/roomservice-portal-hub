@@ -65,7 +65,7 @@ const SupplierIngredientForm = ({
   onRemove 
 }: SupplierIngredientFormProps) => {
   const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
-  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined && ingredient.supplier_product_id !== "");
+  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined);
 
   const handleSupplierProductChange = (productId: string) => {
     const product = supplierProducts.find(p => p.id === productId);
