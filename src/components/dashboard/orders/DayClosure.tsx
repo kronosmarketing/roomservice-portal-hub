@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { DoorClosed, Download, AlertTriangle, Printer } from "lucide-react";
+import { format } from "date-fns";
 import { Order, DayStats } from "./types";
 
 interface DayClosureProps {
@@ -329,7 +330,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
           .from('daily_closures')
           .upsert({
             hotel_id: hotelId,
-            closure_date: today.toISOString().split('T')[0], // Solo la fecha
+            closure_date: format(today, 'yyyy-MM-dd'),
             total_orders: finishedOrders.length,
             completed_orders: completedOrders.length,
             cancelled_orders: cancelledOrders.length,
