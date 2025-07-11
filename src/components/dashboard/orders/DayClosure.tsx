@@ -228,20 +228,26 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, { cantidad: number; total: number }>);
 
-      // Preparar datos del cierre
+      // Preparar datos del cierre con la estructura correcta
       const closureInfo = {
         fecha: today.toLocaleDateString('es-ES'),
+        hora: new Date().toLocaleString('es-ES'),
+        hotel_name: hotelName,
         totalPedidos: finishedOrders.length,
         pedidosCompletados: completedOrders.length,
         pedidosCancelados: cancelledOrders.length,
+        pedidosEliminados: 0,
         totalDinero,
         metodosDetalle,
         timestamp: new Date().toLocaleString('es-ES')
       };
 
-      // Send to webhook BEFORE archiving with correct structure
+      console.log('📄 Datos del Cierre Z preparados:', closureInfo);
+
+      // Enviar al webhook ANTES de archivar con estructura correcta
       try {
-        const { error: webhookError } = await supabase.functions.invoke('print-report', {
+        console.log('🌐 Enviando Cierre Z al webhook...');
+        const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
           body: {
             type: 'closure_z',
             hotel_id: hotelId,
@@ -250,12 +256,14 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         });
 
         if (webhookError) {
-          console.error('Error enviando cierre Z al webhook:', webhookError);
+          console.error('❌ Error enviando Cierre Z al webhook:', webhookError);
+          throw webhookError;
         } else {
-          console.log('✅ Cierre Z enviado al webhook correctamente');
+          console.log('✅ Cierre Z enviado al webhook correctamente:', response);
         }
       } catch (webhookError) {
-        console.error('Error webhook cierre Z:', webhookError);
+        console.error('❌ Error webhook Cierre Z:', webhookError);
+        throw new Error('Error enviando datos al sistema de impresión: ' + (webhookError as Error).message);
       }
 
       // Archivar todos los pedidos (completados y cancelados)
@@ -382,7 +390,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       console.error('❌ Error en cierre Z:', error);
       toast({
         title: "Error",
-        description: "No se pudo completar el cierre Z del día",
+        description: "No se pudo completar el cierre Z del día: " + (error as Error).message,
         variant: "destructive"
       });
     } finally {

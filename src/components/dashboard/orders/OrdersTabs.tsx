@@ -582,6 +582,8 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
   const handlePrintDailyReport = async () => {
     try {
+      console.log('🔄 Iniciando generación de Informe X para hotel:', hotelId);
+      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -603,55 +605,61 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const completedOrders = todayOrders.filter(o => o.status === 'completado');
         const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
         
-        const habitacionOrders = completedOrders.filter(o => o.payment_method === 'habitacion');
-        const efectivoOrders = completedOrders.filter(o => o.payment_method === 'efectivo');
-        const tarjetaOrders = completedOrders.filter(o => o.payment_method === 'tarjeta');
+        // Calcular totales por método de pago
+        const metodosDetalle = completedOrders.reduce((acc, order) => {
+          const method = order.payment_method || 'habitacion';
+          if (!acc[method]) {
+            acc[method] = { cantidad: 0, total: 0 };
+          }
+          acc[method].cantidad += 1;
+          acc[method].total += parseFloat(order.total.toString());
+          return acc;
+        }, {} as Record<string, { cantidad: number; total: number }>);
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
-        const totalHabitacion = habitacionOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
-        const totalEfectivo = efectivoOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
-        const totalTarjeta = tarjetaOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Send to webhook with correct structure
-        try {
-          const { error: webhookError } = await supabase.functions.invoke('print-report', {
-            body: {
-              type: 'daily_report_x',
-              hotel_id: hotelId,
-              data: {
-                total_pedidos: todayOrders.length,
-                pedidos_completados: completedOrders.length,
-                pedidos_cancelados: cancelledOrders.length,
-                metodos_pago: {
-                  habitacion: { cantidad: habitacionOrders.length, total: totalHabitacion },
-                  efectivo: { cantidad: efectivoOrders.length, total: totalEfectivo },
-                  tarjeta: { cantidad: tarjetaOrders.length, total: totalTarjeta }
-                },
-                total_dinero: totalMoney
-              }
-            }
-          });
+        // Preparar datos para el webhook con estructura correcta
+        const reportData = {
+          fecha: today.toLocaleDateString('es-ES'),
+          hora: new Date().toLocaleString('es-ES'),
+          hotel_name: hotelName,
+          totalPedidos: todayOrders.length,
+          pedidosCompletados: completedOrders.length,
+          pedidosCancelados: cancelledOrders.length,
+          pedidosEliminados: 0,
+          totalDinero: totalMoney,
+          metodosDetalle: metodosDetalle
+        };
 
-          if (webhookError) {
-            console.error('Error enviando informe X al webhook:', webhookError);
-          } else {
-            console.log('✅ Informe X enviado al webhook correctamente');
+        console.log('📊 Datos del Informe X preparados:', reportData);
+
+        // Enviar al webhook con la estructura correcta
+        const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
+          body: {
+            type: 'daily_report_x',
+            hotel_id: hotelId,
+            data: reportData
           }
-        } catch (webhookError) {
-          console.error('Error webhook informe X:', webhookError);
+        });
+
+        if (webhookError) {
+          console.error('❌ Error enviando Informe X al webhook:', webhookError);
+          throw webhookError;
+        } else {
+          console.log('✅ Informe X enviado correctamente:', response);
         }
       }
 
       toast({
         title: "Informe X enviado",
-        description: "Informe parcial del día enviado al sistema de impresión",
+        description: "Informe parcial del día enviado al sistema de impresión correctamente",
       });
 
     } catch (error) {
-      console.error('Error generando informe X:', error);
+      console.error('❌ Error generando Informe X:', error);
       toast({
         title: "Error",
-        description: "No se pudo generar el informe X",
+        description: "No se pudo generar el Informe X: " + (error as Error).message,
         variant: "destructive"
       });
     }
