@@ -239,7 +239,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         timestamp: new Date().toLocaleString('es-ES')
       };
 
-      // Send to webhook BEFORE archiving (no print dialog)
+      // Send to webhook BEFORE archiving with correct structure
       try {
         const { error: webhookError } = await supabase.functions.invoke('print-report', {
           body: {

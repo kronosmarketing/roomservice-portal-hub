@@ -612,14 +612,13 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const totalEfectivo = efectivoOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
         const totalTarjeta = tarjetaOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Send to webhook (no print dialog)
+        // Send to webhook with correct structure
         try {
           const { error: webhookError } = await supabase.functions.invoke('print-report', {
             body: {
               type: 'daily_report_x',
               hotel_id: hotelId,
               data: {
-                fecha: today.toLocaleDateString('es-ES'),
                 total_pedidos: todayOrders.length,
                 pedidos_completados: completedOrders.length,
                 pedidos_cancelados: cancelledOrders.length,

@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const webhookUrl = Deno.env.get('MENU_IMPORT_WEBHOOK_URL'); // Using existing webhook URL
+const printWebhookUrl = Deno.env.get('PRINT_WEBHOOK_URL'); // Correct webhook URL for printing
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -23,7 +23,7 @@ serve(async (req) => {
     
     const { type, hotel_id, order_id, data } = await req.json();
 
-    console.log('📤 Enviando al webhook:', { type, hotel_id, order_id });
+    console.log('📤 Enviando al webhook de impresión:', { type, hotel_id, order_id });
 
     // Validate required fields
     if (!type || !hotel_id) {
@@ -37,19 +37,82 @@ serve(async (req) => {
       .eq('id', hotel_id)
       .single();
 
-    // Prepare webhook payload
-    const webhookPayload = {
-      type,
-      hotel_id,
-      hotel_name: hotelData?.hotel_name || 'Hotel desconocido',
-      order_id: order_id || null,
-      timestamp: new Date().toISOString(),
-      data: data || {}
-    };
+    const hotelName = hotelData?.hotel_name || '';
 
-    // Send to webhook if URL is configured
-    if (webhookUrl) {
-      const webhookResponse = await fetch(webhookUrl, {
+    // Prepare webhook payload with correct structure
+    let webhookPayload;
+    const currentTime = new Date();
+    const fechaFormateada = currentTime.toLocaleDateString('es-ES');
+    const horaFormateada = currentTime.toLocaleString('es-ES');
+
+    switch (type) {
+      case 'order_print':
+        webhookPayload = {
+          hotel_id,
+          report_type: 'pedido_individual',
+          report_data: {
+            fecha: fechaFormateada,
+            hora: horaFormateada,
+            hotel_name: hotelName,
+            order_id: order_id || '',
+            room_number: data?.room_number || '',
+            items: data?.items || '',
+            total: parseFloat(data?.total || '0'),
+            status: data?.status || '',
+            payment_method: data?.payment_method || 'habitacion',
+            special_instructions: data?.special_instructions || '',
+            timestamp: data?.timestamp || fechaFormateada
+          }
+        };
+        break;
+
+      case 'daily_report_x':
+        webhookPayload = {
+          hotel_id,
+          report_type: 'informe_x',
+          report_data: {
+            fecha: fechaFormateada,
+            hora: horaFormateada,
+            hotel_name: hotelName,
+            totalPedidos: data?.total_pedidos || 0,
+            pedidosCompletados: data?.pedidos_completados || 0,
+            pedidosCancelados: data?.pedidos_cancelados || 0,
+            pedidosEliminados: 0,
+            totalDinero: parseFloat(data?.total_dinero || '0'),
+            metodosDetalle: data?.metodos_pago || {}
+          }
+        };
+        break;
+
+      case 'closure_z':
+        webhookPayload = {
+          hotel_id,
+          report_type: 'cierre_z',
+          report_data: {
+            fecha: fechaFormateada,
+            hora: horaFormateada,
+            hotel_name: hotelName,
+            totalPedidos: data?.totalPedidos || 0,
+            pedidosCompletados: data?.pedidosCompletados || 0,
+            pedidosCancelados: data?.pedidosCancelados || 0,
+            pedidosEliminados: 0,
+            totalDinero: parseFloat(data?.totalDinero || '0'),
+            metodosDetalle: data?.metodosDetalle || {}
+          }
+        };
+        break;
+
+      default:
+        throw new Error(`Tipo de reporte no soportado: ${type}`);
+    }
+
+    console.log('📄 Payload preparado:', JSON.stringify(webhookPayload, null, 2));
+
+    // Send to print webhook if URL is configured
+    if (printWebhookUrl) {
+      console.log('🌐 Enviando a webhook:', printWebhookUrl);
+      
+      const webhookResponse = await fetch(printWebhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,13 +120,26 @@ serve(async (req) => {
         body: JSON.stringify(webhookPayload),
       });
 
+      const responseText = await webhookResponse.text();
+      console.log('📨 Respuesta del webhook:', {
+        status: webhookResponse.status,
+        statusText: webhookResponse.statusText,
+        body: responseText
+      });
+
       if (!webhookResponse.ok) {
-        console.error('❌ Error webhook response:', webhookResponse.status);
+        console.error('❌ Error webhook response:', {
+          status: webhookResponse.status,
+          statusText: webhookResponse.statusText,
+          body: responseText
+        });
+        throw new Error(`Webhook error: ${webhookResponse.status} - ${responseText}`);
       } else {
         console.log('✅ Webhook enviado correctamente');
       }
     } else {
-      console.log('⚠️ Webhook URL no configurado');
+      console.log('⚠️ PRINT_WEBHOOK_URL no configurado');
+      throw new Error('PRINT_WEBHOOK_URL no está configurado');
     }
 
     // Log the action for security audit
@@ -75,16 +151,18 @@ serve(async (req) => {
       resource_id: order_id,
       details: {
         type,
-        webhook_sent: !!webhookUrl,
-        timestamp: new Date().toISOString()
+        webhook_sent: !!printWebhookUrl,
+        timestamp: new Date().toISOString(),
+        payload_structure: Object.keys(webhookPayload)
       }
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        webhook_sent: !!webhookUrl,
-        message: 'Print webhook processed'
+        webhook_sent: !!printWebhookUrl,
+        message: 'Print webhook processed successfully',
+        payload_sent: webhookPayload
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -98,7 +176,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        success: false 
+        success: false,
+        details: 'Check function logs for more information'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
