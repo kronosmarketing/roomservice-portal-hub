@@ -16,6 +16,7 @@ interface OrderReportsDialogProps {
 interface ReportStats {
   completados: number;
   cancelados: number;
+  eliminados: number;
   habitacion: number;
   efectivo: number;
   tarjeta: number;
@@ -29,6 +30,7 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
   const [stats, setStats] = useState<ReportStats>({
     completados: 0,
     cancelados: 0,
+    eliminados: 0,
     habitacion: 0,
     efectivo: 0,
     tarjeta: 0,
@@ -74,6 +76,21 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
         throw error;
       }
 
+      // Obtener pedidos eliminados del día desde security_audit_log
+      const { data: deletedOrdersLog, error: deletedError } = await supabase
+        .from('security_audit_log')
+        .select('created_at')
+        .eq('hotel_id', hotelId)
+        .eq('action', 'delete_order')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      if (deletedError) {
+        console.error('Error obteniendo pedidos eliminados:', deletedError);
+      }
+
+      const deletedOrdersCount = deletedOrdersLog?.length || 0;
+
       if (todayOrders) {
         const completedOrders = todayOrders.filter(o => o.status === 'completado');
         const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
@@ -90,6 +107,7 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
         setStats({
           completados: completedOrders.length,
           cancelados: cancelledOrders.length,
+          eliminados: deletedOrdersCount,
           habitacion: habitacionOrders.length,
           efectivo: efectivoOrders.length,
           tarjeta: tarjetaOrders.length,
@@ -181,6 +199,10 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
               <span>Cancelados:</span>
               <span>${stats.cancelados}</span>
             </div>
+            <div class="row">
+              <span>Eliminados:</span>
+              <span>${stats.eliminados}</span>
+            </div>
             
             <div class="separator"></div>
             
@@ -263,6 +285,10 @@ const OrderReportsDialog = ({ isOpen, onClose, hotelId }: OrderReportsDialogProp
                   <div className="flex justify-between">
                     <span>Cancelados:</span>
                     <span className="font-bold text-red-600">{stats.cancelados}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Eliminados:</span>
+                    <span className="font-bold text-gray-600">{stats.eliminados}</span>
                   </div>
                 </CardContent>
               </Card>

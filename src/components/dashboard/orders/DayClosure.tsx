@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,21 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         throw ordersError;
       }
 
+      // Obtener pedidos eliminados del día desde security_audit_log
+      const { data: deletedOrdersLog, error: deletedError } = await supabase
+        .from('security_audit_log')
+        .select('created_at')
+        .eq('hotel_id', hotelId)
+        .eq('action', 'delete_order')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      if (deletedError) {
+        console.error('Error obteniendo pedidos eliminados:', deletedError);
+      }
+
+      const deletedOrdersCount = deletedOrdersLog?.length || 0;
+
       if (!finishedOrders || finishedOrders.length === 0) {
         toast({
           title: "Sin pedidos para cerrar",
@@ -210,6 +226,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       }
 
       console.log('📋 Pedidos a archivar:', finishedOrders.length);
+      console.log('🗑️ Pedidos eliminados del día:', deletedOrdersCount);
 
       // Separar pedidos completados y cancelados para estadísticas
       const completedOrders = finishedOrders.filter(order => order.status === 'completado');
@@ -235,6 +252,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         totalPedidos: finishedOrders.length,
         pedidosCompletados: completedOrders.length,
         pedidosCancelados: cancelledOrders.length,
+        pedidosEliminados: deletedOrdersCount,
         totalDinero,
         metodosDetalle
       };
@@ -267,7 +285,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         totalPedidos: finishedOrders.length,
         pedidosCompletados: completedOrders.length,
         pedidosCancelados: cancelledOrders.length,
-        pedidosEliminados: 0,
+        pedidosEliminados: deletedOrdersCount,
         totalDinero,
         metodosDetalle,
         timestamp: new Date().toLocaleString('es-ES')
@@ -481,6 +499,10 @@ MarjorAI
                 <div className="flex justify-between">
                   <span>Cancelados:</span>
                   <span className="font-bold text-red-600">{closureData.pedidosCancelados}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Eliminados:</span>
+                  <span className="font-bold text-gray-600">{closureData.pedidosEliminados}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Total final:</span>

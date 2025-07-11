@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -527,6 +528,21 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         throw error;
       }
 
+      // Obtener pedidos eliminados del día desde security_audit_log
+      const { data: deletedOrdersLog, error: deletedError } = await supabase
+        .from('security_audit_log')
+        .select('created_at')
+        .eq('hotel_id', hotelId)
+        .eq('action', 'delete_order')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      if (deletedError) {
+        console.error('Error obteniendo pedidos eliminados:', deletedError);
+      }
+
+      const deletedOrdersCount = deletedOrdersLog?.length || 0;
+
       if (todayOrders) {
         const completedOrders = todayOrders.filter(o => o.status === 'completado');
         const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
@@ -550,6 +566,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           total_pedidos: todayOrders.length,
           pedidos_completados: completedOrders.length,
           pedidos_cancelados: cancelledOrders.length,
+          pedidos_eliminados: deletedOrdersCount,
           total_dinero: totalMoney,
           metodosDetalle: metodosDetalle
         };

@@ -137,9 +137,9 @@ serve(async (req) => {
             totalPedidos: parseInt(requestBody.total_pedidos || '0'),
             pedidosCompletados: parseInt(requestBody.pedidos_completados || '0'),
             pedidosCancelados: parseInt(requestBody.pedidos_cancelados || '0'),
-            pedidosEliminados: 0,
+            pedidosEliminados: parseInt(requestBody.pedidos_eliminados || '0'),
             totalDinero: parseFloat(requestBody.total_dinero || '0'),
-            metodosDetalle: requestBody.metodos_detalle || {}
+            metodosDetalle: requestBody.metodosDetalle || {}
           }
         };
         break;
@@ -155,7 +155,7 @@ serve(async (req) => {
             totalPedidos: parseInt(requestBody.totalPedidos || '0'),
             pedidosCompletados: parseInt(requestBody.pedidosCompletados || '0'),
             pedidosCancelados: parseInt(requestBody.pedidosCancelados || '0'),
-            pedidosEliminados: 0,
+            pedidosEliminados: parseInt(requestBody.pedidosEliminados || '0'),
             totalDinero: parseFloat(requestBody.totalDinero || '0'),
             metodosDetalle: requestBody.metodosDetalle || {}
           }
