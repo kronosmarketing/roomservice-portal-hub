@@ -618,33 +618,27 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Preparar datos para el webhook con estructura correcta
-        const reportData = {
-          fecha: today.toLocaleDateString('es-ES'),
-          hora: new Date().toLocaleString('es-ES'),
-          hotel_name: hotelName,
-          totalPedidos: todayOrders.length,
-          pedidosCompletados: completedOrders.length,
-          pedidosCancelados: cancelledOrders.length,
-          pedidosEliminados: 0,
-          totalDinero: totalMoney,
-          metodosDetalle: metodosDetalle
+        // Estructura de datos corregida - pasar directamente sin anidar en 'data'
+        const reportPayload = {
+          type: 'daily_report_x',
+          hotel_id: hotelId,
+          total_pedidos: todayOrders.length,
+          pedidos_completados: completedOrders.length,
+          pedidos_cancelados: cancelledOrders.length,
+          total_dinero: totalMoney,
+          metodos_pago: metodosDetalle
         };
 
-        console.log('📊 Datos del Informe X preparados:', reportData);
+        console.log('📊 Payload del Informe X preparado:', JSON.stringify(reportPayload, null, 2));
 
-        // Enviar al webhook con la estructura correcta
+        // Enviar al webhook con la estructura corregida
         const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
-          body: {
-            type: 'daily_report_x',
-            hotel_id: hotelId,
-            data: reportData
-          }
+          body: reportPayload
         });
 
         if (webhookError) {
           console.error('❌ Error enviando Informe X al webhook:', webhookError);
-          throw webhookError;
+          throw new Error(`Error del webhook: ${webhookError.message}`);
         } else {
           console.log('✅ Informe X enviado correctamente:', response);
         }

@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const printWebhookUrl = Deno.env.get('PRINT_WEBHOOK_URL'); // Correct webhook URL for printing
+const printWebhookUrl = Deno.env.get('PRINT_WEBHOOK_URL');
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -19,18 +19,39 @@ serve(async (req) => {
   }
 
   try {
+    // Validar variables de entorno críticas
+    if (!printWebhookUrl) {
+      console.error('❌ PRINT_WEBHOOK_URL no está configurado');
+      throw new Error('PRINT_WEBHOOK_URL no está configurado en las variables de entorno');
+    }
+
+    console.log('🌐 Print webhook URL configurado:', printWebhookUrl);
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const { type, hotel_id, order_id, data } = await req.json();
+    // Parsing robusto del JSON
+    let requestBody;
+    try {
+      const rawBody = await req.text();
+      console.log('📥 Raw request body:', rawBody);
+      requestBody = JSON.parse(rawBody);
+      console.log('📋 Parsed request body:', JSON.stringify(requestBody, null, 2));
+    } catch (parseError) {
+      console.error('❌ Error parsing JSON:', parseError);
+      throw new Error('Invalid JSON in request body');
+    }
 
-    console.log('📤 Enviando al webhook de impresión:', { type, hotel_id, order_id });
+    const { type, hotel_id, order_id, ...otherData } = requestBody;
 
-    // Validate required fields
+    console.log('📤 Procesando solicitud:', { type, hotel_id, order_id });
+
+    // Validar campos requeridos
     if (!type || !hotel_id) {
+      console.error('❌ Campos requeridos faltantes:', { type, hotel_id });
       throw new Error('Missing required fields: type and hotel_id');
     }
 
-    // Get hotel name for context
+    // Obtener nombre del hotel
     const { data: hotelData } = await supabase
       .from('hotel_user_settings')
       .select('hotel_name')
@@ -38,8 +59,9 @@ serve(async (req) => {
       .single();
 
     const hotelName = hotelData?.hotel_name || '';
+    console.log('🏨 Hotel name:', hotelName);
 
-    // Prepare webhook payload with correct structure
+    // Preparar payload del webhook según el tipo
     let webhookPayload;
     const currentTime = new Date();
     const fechaFormateada = currentTime.toLocaleDateString('es-ES');
@@ -47,6 +69,7 @@ serve(async (req) => {
 
     switch (type) {
       case 'order_print':
+        const orderData = requestBody.data || {};
         webhookPayload = {
           hotel_id,
           report_type: 'pedido_individual',
@@ -55,13 +78,13 @@ serve(async (req) => {
             hora: horaFormateada,
             hotel_name: hotelName,
             order_id: order_id || '',
-            room_number: data?.room_number || '',
-            items: data?.items || '',
-            total: parseFloat(data?.total || '0'),
-            status: data?.status || '',
-            payment_method: data?.payment_method || 'habitacion',
-            special_instructions: data?.special_instructions || '',
-            timestamp: data?.timestamp || fechaFormateada
+            room_number: orderData.room_number || '',
+            items: orderData.items || '',
+            total: parseFloat(orderData.total || '0'),
+            status: orderData.status || '',
+            payment_method: orderData.payment_method || 'habitacion',
+            special_instructions: orderData.special_instructions || '',
+            timestamp: orderData.timestamp || fechaFormateada
           }
         };
         break;
@@ -74,12 +97,12 @@ serve(async (req) => {
             fecha: fechaFormateada,
             hora: horaFormateada,
             hotel_name: hotelName,
-            totalPedidos: data?.total_pedidos || 0,
-            pedidosCompletados: data?.pedidos_completados || 0,
-            pedidosCancelados: data?.pedidos_cancelados || 0,
+            totalPedidos: requestBody.total_pedidos || 0,
+            pedidosCompletados: requestBody.pedidos_completados || 0,
+            pedidosCancelados: requestBody.pedidos_cancelados || 0,
             pedidosEliminados: 0,
-            totalDinero: parseFloat(data?.total_dinero || '0'),
-            metodosDetalle: data?.metodos_pago || {}
+            totalDinero: parseFloat(requestBody.total_dinero || '0'),
+            metodosDetalle: requestBody.metodos_pago || {}
           }
         };
         break;
@@ -92,57 +115,53 @@ serve(async (req) => {
             fecha: fechaFormateada,
             hora: horaFormateada,
             hotel_name: hotelName,
-            totalPedidos: data?.totalPedidos || 0,
-            pedidosCompletados: data?.pedidosCompletados || 0,
-            pedidosCancelados: data?.pedidosCancelados || 0,
+            totalPedidos: requestBody.totalPedidos || 0,
+            pedidosCompletados: requestBody.pedidosCompletados || 0,
+            pedidosCancelados: requestBody.pedidosCancelados || 0,
             pedidosEliminados: 0,
-            totalDinero: parseFloat(data?.totalDinero || '0'),
-            metodosDetalle: data?.metodosDetalle || {}
+            totalDinero: parseFloat(requestBody.totalDinero || '0'),
+            metodosDetalle: requestBody.metodosDetalle || {}
           }
         };
         break;
 
       default:
+        console.error('❌ Tipo de reporte no soportado:', type);
         throw new Error(`Tipo de reporte no soportado: ${type}`);
     }
 
-    console.log('📄 Payload preparado:', JSON.stringify(webhookPayload, null, 2));
+    console.log('📄 Payload preparado para webhook:', JSON.stringify(webhookPayload, null, 2));
 
-    // Send to print webhook if URL is configured
-    if (printWebhookUrl) {
-      console.log('🌐 Enviando a webhook:', printWebhookUrl);
-      
-      const webhookResponse = await fetch(printWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(webhookPayload),
-      });
+    // Enviar al webhook con manejo de errores mejorado
+    console.log('🌐 Enviando al webhook:', printWebhookUrl);
+    
+    const webhookResponse = await fetch(printWebhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(webhookPayload),
+    });
 
-      const responseText = await webhookResponse.text();
-      console.log('📨 Respuesta del webhook:', {
+    const responseText = await webhookResponse.text();
+    console.log('📨 Respuesta del webhook:', {
+      status: webhookResponse.status,
+      statusText: webhookResponse.statusText,
+      body: responseText
+    });
+
+    if (!webhookResponse.ok) {
+      console.error('❌ Error en respuesta del webhook:', {
         status: webhookResponse.status,
         statusText: webhookResponse.statusText,
         body: responseText
       });
-
-      if (!webhookResponse.ok) {
-        console.error('❌ Error webhook response:', {
-          status: webhookResponse.status,
-          statusText: webhookResponse.statusText,
-          body: responseText
-        });
-        throw new Error(`Webhook error: ${webhookResponse.status} - ${responseText}`);
-      } else {
-        console.log('✅ Webhook enviado correctamente');
-      }
-    } else {
-      console.log('⚠️ PRINT_WEBHOOK_URL no configurado');
-      throw new Error('PRINT_WEBHOOK_URL no está configurado');
+      throw new Error(`Webhook error: ${webhookResponse.status} - ${responseText}`);
     }
 
-    // Log the action for security audit
+    console.log('✅ Datos enviados al webhook correctamente');
+
+    // Log de auditoría de seguridad
     await supabase.from('security_audit_log').insert({
       user_id: null,
       hotel_id,
@@ -151,7 +170,7 @@ serve(async (req) => {
       resource_id: order_id,
       details: {
         type,
-        webhook_sent: !!printWebhookUrl,
+        webhook_sent: true,
         timestamp: new Date().toISOString(),
         payload_structure: Object.keys(webhookPayload)
       }
@@ -160,7 +179,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        webhook_sent: !!printWebhookUrl,
+        webhook_sent: true,
         message: 'Print webhook processed successfully',
         payload_sent: webhookPayload
       }),

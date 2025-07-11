@@ -228,7 +228,38 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, { cantidad: number; total: number }>);
 
-      // Preparar datos del cierre con la estructura correcta
+      // Estructura de datos corregida - pasar directamente sin anidar en 'data'
+      const closurePayload = {
+        type: 'closure_z',
+        hotel_id: hotelId,
+        totalPedidos: finishedOrders.length,
+        pedidosCompletados: completedOrders.length,
+        pedidosCancelados: cancelledOrders.length,
+        totalDinero,
+        metodosDetalle
+      };
+
+      console.log('📄 Payload del Cierre Z preparado:', JSON.stringify(closurePayload, null, 2));
+
+      // Enviar al webhook ANTES de archivar con estructura corregida
+      try {
+        console.log('🌐 Enviando Cierre Z al webhook...');
+        const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
+          body: closurePayload
+        });
+
+        if (webhookError) {
+          console.error('❌ Error enviando Cierre Z al webhook:', webhookError);
+          throw new Error(`Error del webhook: ${webhookError.message}`);
+        } else {
+          console.log('✅ Cierre Z enviado al webhook correctamente:', response);
+        }
+      } catch (webhookError) {
+        console.error('❌ Error webhook Cierre Z:', webhookError);
+        throw new Error('Error enviando datos al sistema de impresión: ' + (webhookError as Error).message);
+      }
+
+      // Preparar datos del cierre para mostrar al usuario (formato local)
       const closureInfo = {
         fecha: today.toLocaleDateString('es-ES'),
         hora: new Date().toLocaleString('es-ES'),
@@ -243,28 +274,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       };
 
       console.log('📄 Datos del Cierre Z preparados:', closureInfo);
-
-      // Enviar al webhook ANTES de archivar con estructura correcta
-      try {
-        console.log('🌐 Enviando Cierre Z al webhook...');
-        const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
-          body: {
-            type: 'closure_z',
-            hotel_id: hotelId,
-            data: closureInfo
-          }
-        });
-
-        if (webhookError) {
-          console.error('❌ Error enviando Cierre Z al webhook:', webhookError);
-          throw webhookError;
-        } else {
-          console.log('✅ Cierre Z enviado al webhook correctamente:', response);
-        }
-      } catch (webhookError) {
-        console.error('❌ Error webhook Cierre Z:', webhookError);
-        throw new Error('Error enviando datos al sistema de impresión: ' + (webhookError as Error).message);
-      }
 
       // Archivar todos los pedidos (completados y cancelados)
       const archivePromises = finishedOrders.map(async (order) => {
