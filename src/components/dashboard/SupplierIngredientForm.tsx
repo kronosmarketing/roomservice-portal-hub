@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +65,7 @@ const SupplierIngredientForm = ({
   onRemove 
 }: SupplierIngredientFormProps) => {
   const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
-  const isSupplierIngredient = Boolean(ingredient.supplier_product_id);
+  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined && ingredient.supplier_product_id !== "");
 
   const handleSupplierProductChange = (productId: string) => {
     const product = supplierProducts.find(p => p.id === productId);
@@ -191,6 +190,14 @@ const SupplierIngredientForm = ({
 
         {selectedProduct && (
           <div className="grid grid-cols-2 gap-4 p-3 bg-blue-100 rounded-lg">
+            <div>
+              <Label className="text-xs text-gray-600">Producto Seleccionado</Label>
+              <p className="font-medium">{selectedProduct.name}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Proveedor</Label>
+              <p className="font-medium">{selectedProduct.supplier.name}</p>
+            </div>
             <div>
               <Label className="text-xs text-gray-600">Cantidad del Paquete</Label>
               <p className="font-medium">{selectedProduct.package_size} {selectedProduct.unit}</p>

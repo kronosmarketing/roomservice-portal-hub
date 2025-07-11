@@ -378,7 +378,10 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       setSending(escandalloId);
       
       const { data, error } = await supabase.functions.invoke('send-recipe', {
-        body: { recipeId: escandalloId }
+        body: { 
+          recipeId: escandalloId,
+          hotelId: hotelId 
+        }
       });
 
       if (error) throw error;
@@ -434,7 +437,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       unit: "g",
       unit_cost: 0,
       total_cost: 0,
-      supplier_product_id: type === 'supplier' ? '' : undefined
+      supplier_product_id: type === 'supplier' ? "" : undefined
     };
     setFormData(prev => ({
       ...prev,
