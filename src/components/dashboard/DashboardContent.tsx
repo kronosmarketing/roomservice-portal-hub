@@ -5,7 +5,8 @@ import OrdersManagement from "./OrdersManagement";
 import MenuManagement from "./MenuManagement";
 import EscandallosManagement from "./EscandallosManagement";
 import ProveedoresManagement from "./ProveedoresManagement";
-import { Package, UtensilsCrossed, Calculator, Building2 } from "lucide-react";
+import ClosuresManagement from "./ClosuresManagement";
+import { Package, UtensilsCrossed, Calculator, Building2, BarChart3 } from "lucide-react";
 
 interface DashboardUser {
   userRole: string;
@@ -34,7 +35,7 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
           </div>
 
           <Tabs defaultValue="orders" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="orders" className="flex items-center gap-2">
                 <Package className="h-4 w-4" />
                 <span className="hidden sm:inline">Pedidos</span>
@@ -50,6 +51,10 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
               <TabsTrigger value="proveedores" className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Proveedores</span>
+              </TabsTrigger>
+              <TabsTrigger value="cierres" className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Cierres</span>
               </TabsTrigger>
             </TabsList>
 
@@ -67,6 +72,10 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
 
             <TabsContent value="proveedores">
               <ProveedoresManagement hotelId={user.hotelId} />
+            </TabsContent>
+
+            <TabsContent value="cierres">
+              <ClosuresManagement hotelId={user.hotelId} />
             </TabsContent>
           </Tabs>
         </div>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -245,36 +244,31 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, { cantidad: number; total: number }>);
 
-      // Estructura de datos corregida - nombres de campos unificados
-      const closurePayload = {
-        type: 'closure_z',
-        hotel_id: hotelId,
-        totalPedidos: finishedOrders.length,
-        pedidosCompletados: completedOrders.length,
-        pedidosCancelados: cancelledOrders.length,
-        pedidosEliminados: deletedOrdersCount,
-        totalDinero,
-        metodosDetalle
-      };
-
-      console.log('📄 Payload del Cierre Z preparado:', JSON.stringify(closurePayload, null, 2));
-
-      // Enviar al webhook ANTES de archivar con estructura corregida
+      // **NUEVA FUNCIONALIDAD: Guardar en daily_closures**
       try {
-        console.log('🌐 Enviando Cierre Z al webhook...');
-        const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
-          body: closurePayload
-        });
+        const { error: closureError } = await supabase
+          .from('daily_closures')
+          .upsert({
+            hotel_id: hotelId,
+            closure_date: today.toISOString().split('T')[0], // Solo la fecha
+            total_orders: finishedOrders.length,
+            completed_orders: completedOrders.length,
+            cancelled_orders: cancelledOrders.length,
+            deleted_orders: deletedOrdersCount,
+            total_revenue: totalDinero,
+            payment_methods_detail: metodosDetalle,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'hotel_id,closure_date'
+          });
 
-        if (webhookError) {
-          console.error('❌ Error enviando Cierre Z al webhook:', webhookError);
-          throw new Error(`Error del webhook: ${webhookError.message}`);
+        if (closureError) {
+          console.error('Error guardando cierre en BD:', closureError);
         } else {
-          console.log('✅ Cierre Z enviado al webhook correctamente:', response);
+          console.log('✅ Cierre guardado en daily_closures exitosamente');
         }
-      } catch (webhookError) {
-        console.error('❌ Error webhook Cierre Z:', webhookError);
-        throw new Error('Error enviando datos al sistema de impresión: ' + (webhookError as Error).message);
+      } catch (dbError) {
+        console.error('Error de BD al guardar cierre:', dbError);
       }
 
       // Preparar datos del cierre para mostrar al usuario (formato local)
@@ -410,7 +404,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       toast({
         title: "Cierre Z completado",
-        description: `Se han archivado ${finishedOrders.length} pedidos y enviado al sistema de impresión`,
+        description: `Se han archivado ${finishedOrders.length} pedidos y guardado en el historial`,
       });
 
     } catch (error) {

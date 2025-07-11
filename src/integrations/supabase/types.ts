@@ -65,6 +65,56 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_closures: {
+        Row: {
+          cancelled_orders: number
+          closure_date: string
+          completed_orders: number
+          created_at: string
+          deleted_orders: number
+          hotel_id: string
+          id: string
+          payment_methods_detail: Json
+          total_orders: number
+          total_revenue: number
+          updated_at: string
+        }
+        Insert: {
+          cancelled_orders?: number
+          closure_date: string
+          completed_orders?: number
+          created_at?: string
+          deleted_orders?: number
+          hotel_id: string
+          id?: string
+          payment_methods_detail?: Json
+          total_orders?: number
+          total_revenue?: number
+          updated_at?: string
+        }
+        Update: {
+          cancelled_orders?: number
+          closure_date?: string
+          completed_orders?: number
+          created_at?: string
+          deleted_orders?: number
+          hotel_id?: string
+          id?: string
+          payment_methods_detail?: Json
+          total_orders?: number
+          total_revenue?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_daily_closures_hotel_id"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           content: string | null
