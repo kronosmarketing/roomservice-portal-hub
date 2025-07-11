@@ -1,16 +1,17 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarIcon, Download, TrendingUp, TrendingDown, DollarSign, Package } from "lucide-react";
+import { CalendarIcon, Download, TrendingUp, TrendingDown, DollarSign, Package, Printer } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import type { Json } from "@/integrations/supabase/types";
+import { reprintClosure } from "./orders/closure/closureUtils";
 
 interface DailyClosure {
   id: string;
@@ -31,6 +32,8 @@ interface ClosuresManagementProps {
 const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
   const [closures, setClosures] = useState<DailyClosure[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reprintingIds, setReprintingIds] = useState<Set<string>>(new Set());
+  const [hotelName, setHotelName] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
@@ -41,6 +44,7 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
   useEffect(() => {
     if (hotelId) {
       loadClosures();
+      loadHotelName();
     }
   }, [hotelId, dateRange]);
 
@@ -66,6 +70,66 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHotelName = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hotel_user_settings')
+        .select('hotel_name')
+        .eq('id', hotelId)
+        .single();
+
+      if (error) throw error;
+      setHotelName(data?.hotel_name || 'Hotel');
+    } catch (error) {
+      console.error('Error cargando nombre del hotel:', error);
+      setHotelName('Hotel');
+    }
+  };
+
+  const handleReprint = async (closure: DailyClosure) => {
+    if (reprintingIds.has(closure.id)) return;
+
+    setReprintingIds(prev => new Set(prev).add(closure.id));
+
+    try {
+      // Convert DailyClosure to ClosureData format
+      const paymentDetails = closure.payment_methods_detail as Record<string, { cantidad: number; total: number }> || {};
+      
+      const closureData = {
+        fecha: format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es }),
+        hora: new Date().toLocaleString('es-ES'),
+        hotel_name: hotelName,
+        totalPedidos: closure.total_orders,
+        pedidosCompletados: closure.completed_orders,
+        pedidosCancelados: closure.cancelled_orders,
+        pedidosEliminados: closure.deleted_orders,
+        totalDinero: Number(closure.total_revenue),
+        metodosDetalle: paymentDetails,
+        timestamp: new Date().toLocaleString('es-ES')
+      };
+
+      await reprintClosure(closureData, hotelId);
+      
+      toast({
+        title: "Reimpresión enviada",
+        description: "El cierre Z se ha enviado nuevamente a la impresora",
+      });
+    } catch (error) {
+      console.error('Error reimprimiendo:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo reimprimir el informe",
+        variant: "destructive"
+      });
+    } finally {
+      setReprintingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(closure.id);
+        return newSet;
+      });
     }
   };
 
@@ -369,30 +433,33 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2">Fecha</th>
-                  <th className="text-left p-2">Total</th>
-                  <th className="text-left p-2">Completados</th>
-                  <th className="text-left p-2">Cancelados</th>
-                  <th className="text-left p-2">Eliminados</th>
-                  <th className="text-left p-2">Ingresos</th>
-                  <th className="text-left p-2">Métodos Pago</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Completados</TableHead>
+                  <TableHead>Cancelados</TableHead>
+                  <TableHead>Eliminados</TableHead>
+                  <TableHead>Ingresos</TableHead>
+                  <TableHead>Métodos Pago</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {closures.map((closure) => {
                   const paymentDetails = closure.payment_methods_detail as Record<string, { cantidad: number; total: number }>;
+                  const isReprinting = reprintingIds.has(closure.id);
+                  
                   return (
-                    <tr key={closure.id} className="border-b hover:bg-gray-50">
-                      <td className="p-2">{format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es })}</td>
-                      <td className="p-2 font-medium">{closure.total_orders}</td>
-                      <td className="p-2 text-green-600">{closure.completed_orders}</td>
-                      <td className="p-2 text-red-600">{closure.cancelled_orders}</td>
-                      <td className="p-2 text-gray-600">{closure.deleted_orders}</td>
-                      <td className="p-2 font-medium">€{closure.total_revenue.toFixed(2)}</td>
-                      <td className="p-2">
+                    <TableRow key={closure.id}>
+                      <TableCell>{format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es })}</TableCell>
+                      <TableCell className="font-medium">{closure.total_orders}</TableCell>
+                      <TableCell className="text-green-600">{closure.completed_orders}</TableCell>
+                      <TableCell className="text-red-600">{closure.cancelled_orders}</TableCell>
+                      <TableCell className="text-gray-600">{closure.deleted_orders}</TableCell>
+                      <TableCell className="font-medium">€{closure.total_revenue.toFixed(2)}</TableCell>
+                      <TableCell>
                         <div className="text-xs">
                           {paymentDetails && typeof paymentDetails === 'object' && 
                             Object.entries(paymentDetails).map(([method, data]) => (
@@ -403,12 +470,23 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
                               ) : null
                             ))}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReprint(closure)}
+                          disabled={isReprinting}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Printer className={`h-4 w-4 ${isReprinting ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
