@@ -90,6 +90,36 @@ const getStatusBadgeColor = (status: string) => {
   }
 };
 
+const formatItemsForDisplay = (items: string) => {
+  try {
+    // First try to parse as JSON array
+    if (typeof items === 'string' && items.startsWith('[')) {
+      const itemsArray = JSON.parse(items);
+      return itemsArray.map((item: any, index: number) => (
+        <div key={index} className="text-sm">
+          {item.quantity && item.name 
+            ? sanitizeInput(`${item.quantity}x ${item.name}`)
+            : item.quantity && item.menu_item?.name
+            ? sanitizeInput(`${item.quantity}x ${item.menu_item.name}`)
+            : sanitizeInput(item.toString())
+          }
+        </div>
+      ));
+    }
+    
+    // If it's already a formatted string, split by commas or newlines
+    const itemsList = items.includes('\n') ? items.split('\n') : items.split(', ');
+    return itemsList.map((item: string, index: number) => (
+      <div key={index} className="text-sm">
+        {sanitizeInput(item.trim())}
+      </div>
+    ));
+  } catch (error) {
+    // Fallback to display as single item
+    return <div className="text-sm">{sanitizeInput(items)}</div>;
+  }
+};
+
 const OrderCard = ({ 
   order, 
   onStatusChange, 
@@ -176,8 +206,8 @@ const OrderCard = ({
       <CardContent>
         <div className="space-y-3 mb-4">
           <div>
-            <span className={`font-medium ${isMobile ? 'text-sm' : ''}`}>
-              {sanitizeInput(order.items)}
+            <span className={`font-medium ${isMobile ? 'text-sm' : ''} block`}>
+              {formatItemsForDisplay(order.items)}
             </span>
           </div>
           <div className="text-xs text-gray-600">
