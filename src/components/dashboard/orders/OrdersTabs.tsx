@@ -605,7 +605,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const completedOrders = todayOrders.filter(o => o.status === 'completado');
         const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
         
-        // Calcular totales por método de pago
+        // Calcular totales por método de pago - NOMBRE CORREGIDO
         const metodosDetalle = completedOrders.reduce((acc, order) => {
           const method = order.payment_method || 'habitacion';
           if (!acc[method]) {
@@ -618,7 +618,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Estructura de datos corregida - pasar directamente sin anidar en 'data'
+        // Estructura de datos corregida - nombres de campos unificados
         const reportPayload = {
           type: 'daily_report_x',
           hotel_id: hotelId,
@@ -626,7 +626,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           pedidos_completados: completedOrders.length,
           pedidos_cancelados: cancelledOrders.length,
           total_dinero: totalMoney,
-          metodos_pago: metodosDetalle
+          metodos_detalle: metodosDetalle  // NOMBRE CORREGIDO
         };
 
         console.log('📊 Payload del Informe X preparado:', JSON.stringify(reportPayload, null, 2));

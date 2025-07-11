@@ -19,6 +19,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔄 Iniciando función print-report');
+    
     // Validar variables de entorno críticas
     if (!printWebhookUrl) {
       console.error('❌ PRINT_WEBHOOK_URL no está configurado');
@@ -34,11 +36,25 @@ serve(async (req) => {
     try {
       const rawBody = await req.text();
       console.log('📥 Raw request body:', rawBody);
+      
+      if (!rawBody || rawBody.trim() === '') {
+        throw new Error('Request body is empty');
+      }
+      
       requestBody = JSON.parse(rawBody);
       console.log('📋 Parsed request body:', JSON.stringify(requestBody, null, 2));
     } catch (parseError) {
       console.error('❌ Error parsing JSON:', parseError);
-      throw new Error('Invalid JSON in request body');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: parseError.message 
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      );
     }
 
     const { type, hotel_id, order_id, ...otherData } = requestBody;
@@ -48,17 +64,38 @@ serve(async (req) => {
     // Validar campos requeridos
     if (!type || !hotel_id) {
       console.error('❌ Campos requeridos faltantes:', { type, hotel_id });
-      throw new Error('Missing required fields: type and hotel_id');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Missing required fields: type and hotel_id',
+          received: { type, hotel_id }
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      );
     }
 
-    // Obtener nombre del hotel
-    const { data: hotelData } = await supabase
-      .from('hotel_user_settings')
-      .select('hotel_name')
-      .eq('id', hotel_id)
-      .single();
+    // Obtener nombre del hotel con manejo de errores
+    let hotelName = '';
+    try {
+      const { data: hotelData, error: hotelError } = await supabase
+        .from('hotel_user_settings')
+        .select('hotel_name')
+        .eq('id', hotel_id)
+        .single();
 
-    const hotelName = hotelData?.hotel_name || '';
+      if (hotelError) {
+        console.error('❌ Error obteniendo hotel:', hotelError);
+        hotelName = 'Hotel Desconocido';
+      } else {
+        hotelName = hotelData?.hotel_name || 'Hotel Desconocido';
+      }
+    } catch (hotelFetchError) {
+      console.error('❌ Error crítico obteniendo hotel:', hotelFetchError);
+      hotelName = 'Hotel Desconocido';
+    }
+
     console.log('🏨 Hotel name:', hotelName);
 
     // Preparar payload del webhook según el tipo
@@ -97,12 +134,12 @@ serve(async (req) => {
             fecha: fechaFormateada,
             hora: horaFormateada,
             hotel_name: hotelName,
-            totalPedidos: requestBody.total_pedidos || 0,
-            pedidosCompletados: requestBody.pedidos_completados || 0,
-            pedidosCancelados: requestBody.pedidos_cancelados || 0,
+            totalPedidos: parseInt(requestBody.total_pedidos || '0'),
+            pedidosCompletados: parseInt(requestBody.pedidos_completados || '0'),
+            pedidosCancelados: parseInt(requestBody.pedidos_cancelados || '0'),
             pedidosEliminados: 0,
             totalDinero: parseFloat(requestBody.total_dinero || '0'),
-            metodosDetalle: requestBody.metodos_pago || {}
+            metodosDetalle: requestBody.metodos_detalle || {}
           }
         };
         break;
@@ -115,9 +152,9 @@ serve(async (req) => {
             fecha: fechaFormateada,
             hora: horaFormateada,
             hotel_name: hotelName,
-            totalPedidos: requestBody.totalPedidos || 0,
-            pedidosCompletados: requestBody.pedidosCompletados || 0,
-            pedidosCancelados: requestBody.pedidosCancelados || 0,
+            totalPedidos: parseInt(requestBody.totalPedidos || '0'),
+            pedidosCompletados: parseInt(requestBody.pedidosCompletados || '0'),
+            pedidosCancelados: parseInt(requestBody.pedidosCancelados || '0'),
             pedidosEliminados: 0,
             totalDinero: parseFloat(requestBody.totalDinero || '0'),
             metodosDetalle: requestBody.metodosDetalle || {}
@@ -127,7 +164,16 @@ serve(async (req) => {
 
       default:
         console.error('❌ Tipo de reporte no soportado:', type);
-        throw new Error(`Tipo de reporte no soportado: ${type}`);
+        return new Response(
+          JSON.stringify({ 
+            error: `Tipo de reporte no soportado: ${type}`,
+            supported_types: ['order_print', 'daily_report_x', 'closure_z']
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+          }
+        );
     }
 
     console.log('📄 Payload preparado para webhook:', JSON.stringify(webhookPayload, null, 2));
@@ -135,68 +181,104 @@ serve(async (req) => {
     // Enviar al webhook con manejo de errores mejorado
     console.log('🌐 Enviando al webhook:', printWebhookUrl);
     
-    const webhookResponse = await fetch(printWebhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(webhookPayload),
-    });
+    try {
+      const webhookResponse = await fetch(printWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Supabase-Edge-Function/1.0',
+        },
+        body: JSON.stringify(webhookPayload),
+      });
 
-    const responseText = await webhookResponse.text();
-    console.log('📨 Respuesta del webhook:', {
-      status: webhookResponse.status,
-      statusText: webhookResponse.statusText,
-      body: responseText
-    });
-
-    if (!webhookResponse.ok) {
-      console.error('❌ Error en respuesta del webhook:', {
+      const responseText = await webhookResponse.text();
+      console.log('📨 Respuesta del webhook:', {
         status: webhookResponse.status,
         statusText: webhookResponse.statusText,
+        headers: Object.fromEntries(webhookResponse.headers.entries()),
         body: responseText
       });
-      throw new Error(`Webhook error: ${webhookResponse.status} - ${responseText}`);
+
+      if (!webhookResponse.ok) {
+        console.error('❌ Error en respuesta del webhook:', {
+          status: webhookResponse.status,
+          statusText: webhookResponse.statusText,
+          body: responseText
+        });
+        
+        return new Response(
+          JSON.stringify({ 
+            error: `Webhook error: ${webhookResponse.status} - ${webhookResponse.statusText}`,
+            webhook_response: responseText,
+            webhook_url: printWebhookUrl
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 502,
+          }
+        );
+      }
+
+      console.log('✅ Datos enviados al webhook correctamente');
+
+      // Log de auditoría de seguridad
+      try {
+        await supabase.from('security_audit_log').insert({
+          user_id: null,
+          hotel_id,
+          action: 'print_webhook_sent',
+          resource_type: 'print',
+          resource_id: order_id,
+          details: {
+            type,
+            webhook_sent: true,
+            timestamp: new Date().toISOString(),
+            payload_structure: Object.keys(webhookPayload)
+          }
+        });
+      } catch (auditError) {
+        console.error('⚠️ Error en log de auditoría (no crítico):', auditError);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          webhook_sent: true,
+          message: 'Print webhook processed successfully',
+          webhook_url: printWebhookUrl,
+          payload_sent: webhookPayload
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+
+    } catch (webhookError) {
+      console.error('❌ Error crítico enviando al webhook:', webhookError);
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to send data to webhook',
+          details: webhookError.message,
+          webhook_url: printWebhookUrl
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 502,
+        }
+      );
     }
 
-    console.log('✅ Datos enviados al webhook correctamente');
-
-    // Log de auditoría de seguridad
-    await supabase.from('security_audit_log').insert({
-      user_id: null,
-      hotel_id,
-      action: 'print_webhook_sent',
-      resource_type: 'print',
-      resource_id: order_id,
-      details: {
-        type,
-        webhook_sent: true,
-        timestamp: new Date().toISOString(),
-        payload_structure: Object.keys(webhookPayload)
-      }
-    });
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        webhook_sent: true,
-        message: 'Print webhook processed successfully',
-        payload_sent: webhookPayload
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
-
   } catch (error) {
-    console.error('❌ Error en print-report function:', error);
+    console.error('❌ Error crítico en print-report function:', error);
     
     return new Response(
       JSON.stringify({ 
         error: error.message,
         success: false,
-        details: 'Check function logs for more information'
+        details: 'Check function logs for more information',
+        timestamp: new Date().toISOString()
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

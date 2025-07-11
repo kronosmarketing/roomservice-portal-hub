@@ -228,7 +228,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, { cantidad: number; total: number }>);
 
-      // Estructura de datos corregida - pasar directamente sin anidar en 'data'
+      // Estructura de datos corregida - nombres de campos unificados
       const closurePayload = {
         type: 'closure_z',
         hotel_id: hotelId,
