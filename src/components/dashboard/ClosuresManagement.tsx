@@ -10,6 +10,7 @@ import { CalendarIcon, Download, TrendingUp, TrendingDown, DollarSign, Package }
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import type { Json } from "@/integrations/supabase/types";
 
 interface DailyClosure {
   id: string;
@@ -19,7 +20,7 @@ interface DailyClosure {
   cancelled_orders: number;
   deleted_orders: number;
   total_revenue: number;
-  payment_methods_detail: Record<string, { cantidad: number; total: number }>;
+  payment_methods_detail: Json;
   created_at: string;
 }
 
@@ -100,10 +101,15 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
     const aggregated: Record<string, number> = {};
     
     closures.forEach(closure => {
-      Object.entries(closure.payment_methods_detail).forEach(([method, data]) => {
-        if (!aggregated[method]) aggregated[method] = 0;
-        aggregated[method] += data.total;
-      });
+      const paymentDetails = closure.payment_methods_detail as Record<string, { cantidad: number; total: number }>;
+      if (paymentDetails && typeof paymentDetails === 'object') {
+        Object.entries(paymentDetails).forEach(([method, data]) => {
+          if (data && typeof data === 'object' && 'total' in data) {
+            if (!aggregated[method]) aggregated[method] = 0;
+            aggregated[method] += data.total;
+          }
+        });
+      }
     });
 
     return Object.entries(aggregated).map(([method, total]) => ({
@@ -376,25 +382,31 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
                 </tr>
               </thead>
               <tbody>
-                {closures.map((closure) => (
-                  <tr key={closure.id} className="border-b hover:bg-gray-50">
-                    <td className="p-2">{format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es })}</td>
-                    <td className="p-2 font-medium">{closure.total_orders}</td>
-                    <td className="p-2 text-green-600">{closure.completed_orders}</td>
-                    <td className="p-2 text-red-600">{closure.cancelled_orders}</td>
-                    <td className="p-2 text-gray-600">{closure.deleted_orders}</td>
-                    <td className="p-2 font-medium">€{closure.total_revenue.toFixed(2)}</td>
-                    <td className="p-2">
-                      <div className="text-xs">
-                        {Object.entries(closure.payment_methods_detail).map(([method, data]) => (
-                          <div key={method}>
-                            {method}: {data.cantidad} (€{data.total.toFixed(2)})
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {closures.map((closure) => {
+                  const paymentDetails = closure.payment_methods_detail as Record<string, { cantidad: number; total: number }>;
+                  return (
+                    <tr key={closure.id} className="border-b hover:bg-gray-50">
+                      <td className="p-2">{format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es })}</td>
+                      <td className="p-2 font-medium">{closure.total_orders}</td>
+                      <td className="p-2 text-green-600">{closure.completed_orders}</td>
+                      <td className="p-2 text-red-600">{closure.cancelled_orders}</td>
+                      <td className="p-2 text-gray-600">{closure.deleted_orders}</td>
+                      <td className="p-2 font-medium">€{closure.total_revenue.toFixed(2)}</td>
+                      <td className="p-2">
+                        <div className="text-xs">
+                          {paymentDetails && typeof paymentDetails === 'object' && 
+                            Object.entries(paymentDetails).map(([method, data]) => (
+                              data && typeof data === 'object' && 'cantidad' in data && 'total' in data ? (
+                                <div key={method}>
+                                  {method}: {data.cantidad} (€{data.total.toFixed(2)})
+                                </div>
+                              ) : null
+                            ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
