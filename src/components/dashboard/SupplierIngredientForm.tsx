@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Calculator } from "lucide-react";
+import { useState } from "react";
 
 interface RecipeIngredient {
   id: string;
@@ -65,10 +66,24 @@ const SupplierIngredientForm = ({
   onUpdate, 
   onRemove 
 }: SupplierIngredientFormProps) => {
+  // Estados locales para manejo de inputs temporalmente vacíos
+  const [tempQuantity, setTempQuantity] = useState<string>(ingredient.quantity?.toString() || '');
+  const [tempUnitCost, setTempUnitCost] = useState<string>(ingredient.unit_cost?.toString() || '');
+
   const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
-  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined && ingredient.supplier_product_id !== null && ingredient.supplier_product_id !== "");
+  
+  // CORRECCIÓN CRÍTICA: Detectar correctamente ingredientes de proveedor
+  const isSupplierIngredient = ingredient.supplier_product_id !== undefined;
+
+  console.log('SupplierIngredientForm Debug:', {
+    ingredientId: ingredient.id,
+    supplier_product_id: ingredient.supplier_product_id,
+    isSupplierIngredient,
+    selectedProduct: selectedProduct?.name
+  });
 
   const handleSupplierProductChange = (productId: string) => {
+    console.log('Seleccionando producto:', productId);
     const product = supplierProducts.find(p => p.id === productId);
     if (product) {
       onUpdate(index, 'supplier_product_id', productId);
@@ -116,17 +131,22 @@ const SupplierIngredientForm = ({
 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const quantity = value === '' ? 0 : parseFloat(value);
-    
-    if (!isNaN(quantity) && quantity >= 0) {
-      onUpdate(index, 'quantity', quantity);
+    setTempQuantity(value);
+  };
+
+  const handleQuantityBlur = () => {
+    const numValue = tempQuantity === '' ? 0 : parseFloat(tempQuantity);
+    if (!isNaN(numValue) && numValue >= 0) {
+      onUpdate(index, 'quantity', numValue);
       if (isSupplierIngredient) {
-        calculateCost(quantity, ingredient.unit);
+        calculateCost(numValue, ingredient.unit);
       } else {
-        // For manual ingredients, recalculate total cost
-        const totalCost = quantity * ingredient.unit_cost;
+        // Para ingredientes manuales, recalcular costo total
+        const totalCost = numValue * ingredient.unit_cost;
         onUpdate(index, 'total_cost', totalCost);
       }
+    } else {
+      setTempQuantity(ingredient.quantity?.toString() || '0');
     }
   };
 
@@ -135,7 +155,7 @@ const SupplierIngredientForm = ({
     if (isSupplierIngredient) {
       calculateCost(ingredient.quantity, unit);
     } else {
-      // For manual ingredients, just recalculate total cost
+      // Para ingredientes manuales, solo recalcular costo total
       const totalCost = ingredient.quantity * ingredient.unit_cost;
       onUpdate(index, 'total_cost', totalCost);
     }
@@ -143,12 +163,17 @@ const SupplierIngredientForm = ({
 
   const handleUnitCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const unitCost = value === '' ? 0 : parseFloat(value);
-    
-    if (!isNaN(unitCost) && unitCost >= 0) {
-      onUpdate(index, 'unit_cost', unitCost);
-      const totalCost = ingredient.quantity * unitCost;
+    setTempUnitCost(value);
+  };
+
+  const handleUnitCostBlur = () => {
+    const numValue = tempUnitCost === '' ? 0 : parseFloat(tempUnitCost);
+    if (!isNaN(numValue) && numValue >= 0) {
+      onUpdate(index, 'unit_cost', numValue);
+      const totalCost = ingredient.quantity * numValue;
       onUpdate(index, 'total_cost', totalCost);
+    } else {
+      setTempUnitCost(ingredient.unit_cost?.toString() || '0');
     }
   };
 
@@ -248,8 +273,9 @@ const SupplierIngredientForm = ({
               type="number"
               step="0.01"
               min="0"
-              value={ingredient.quantity || ''}
+              value={tempQuantity}
               onChange={handleQuantityChange}
+              onBlur={handleQuantityBlur}
               placeholder="0"
             />
           </div>
@@ -277,8 +303,9 @@ const SupplierIngredientForm = ({
                 type="number"
                 step="0.01"
                 min="0"
-                value={ingredient.unit_cost || ''}
+                value={tempUnitCost}
                 onChange={handleUnitCostChange}
+                onBlur={handleUnitCostBlur}
                 placeholder="0"
               />
             </div>
