@@ -41,4 +41,5 @@ export interface RecipeIngredient {
   // Additional fields for manual ingredients
   package_quantity?: number;
   package_price?: number;
+  package_unit?: string; // Nueva unidad independiente para cantidad de referencia
 }

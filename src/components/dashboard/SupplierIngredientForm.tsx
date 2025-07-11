@@ -49,6 +49,20 @@ const CONVERSION_FACTORS: { [key: string]: { factor: number; baseUnit: string } 
   'cup': { factor: 240, baseUnit: 'ml' }
 };
 
+// Nueva función para convertir entre unidades
+const convertUnits = (value: number, fromUnit: string, toUnit: string): number | null => {
+  const fromConversion = CONVERSION_FACTORS[fromUnit];
+  const toConversion = CONVERSION_FACTORS[toUnit];
+  
+  if (!fromConversion || !toConversion || fromConversion.baseUnit !== toConversion.baseUnit) {
+    return null; // No se puede convertir entre unidades incompatibles
+  }
+  
+  // Convertir a unidad base y luego a unidad destino
+  const baseValue = value * fromConversion.factor;
+  return baseValue / toConversion.factor;
+};
+
 const SupplierIngredientForm = ({ 
   ingredient, 
   index, 
@@ -69,6 +83,7 @@ const SupplierIngredientForm = ({
     quantity: ingredient.quantity,
     unit: ingredient.unit,
     package_quantity: ingredient.package_quantity,
+    package_unit: ingredient.package_unit,
     package_price: ingredient.package_price
   });
 
@@ -147,28 +162,46 @@ const SupplierIngredientForm = ({
     const packageQty = ingredient.package_quantity || 1;
     const packagePrice = ingredient.package_price || 0;
     const usedQuantity = ingredient.quantity || 0;
+    const usedUnit = ingredient.unit;
+    const packageUnit = ingredient.package_unit || ingredient.unit; // Default a la misma unidad
 
     if (packageQty > 0 && packagePrice > 0 && usedQuantity > 0) {
-      // Calcular proporción usada
-      const proportion = usedQuantity / packageQty;
-      
-      // Calcular costo unitario (precio por unidad usada)
-      const unitCost = packagePrice / packageQty;
-      
-      // Calcular costo total
-      const totalCost = usedQuantity * unitCost;
+      // Convertir ambas cantidades a la misma unidad base para el cálculo
+      const usedUnitConversion = CONVERSION_FACTORS[usedUnit];
+      const packageUnitConversion = CONVERSION_FACTORS[packageUnit];
 
-      console.log('💰 Cálculo de costo manual:', {
-        packageQty,
-        packagePrice,
-        usedQuantity,
-        proportion,
-        unitCost,
-        totalCost
-      });
+      if (usedUnitConversion && packageUnitConversion && 
+          usedUnitConversion.baseUnit === packageUnitConversion.baseUnit) {
+        
+        // Convertir a unidad base
+        const usedQuantityInBaseUnit = usedQuantity * usedUnitConversion.factor;
+        const packageQuantityInBaseUnit = packageQty * packageUnitConversion.factor;
+        
+        // Calcular proporción y costos
+        const proportion = usedQuantityInBaseUnit / packageQuantityInBaseUnit;
+        const unitCost = packagePrice / packageQuantityInBaseUnit; // Costo por unidad base
+        const unitCostInUsedUnit = unitCost * usedUnitConversion.factor; // Costo por unidad usada
+        const totalCost = usedQuantity * unitCostInUsedUnit;
 
-      onUpdate(index, 'unit_cost', unitCost);
-      onUpdate(index, 'total_cost', totalCost);
+        console.log('💰 Cálculo de costo manual con conversión:', {
+          usedQuantity,
+          usedUnit,
+          packageQty,
+          packageUnit,
+          usedQuantityInBaseUnit,
+          packageQuantityInBaseUnit,
+          proportion,
+          unitCostInUsedUnit,
+          totalCost
+        });
+
+        onUpdate(index, 'unit_cost', unitCostInUsedUnit);
+        onUpdate(index, 'total_cost', totalCost);
+      } else {
+        console.log('❌ No se puede convertir entre unidades incompatibles');
+        onUpdate(index, 'unit_cost', 0);
+        onUpdate(index, 'total_cost', 0);
+      }
     }
   };
 
@@ -208,6 +241,11 @@ const SupplierIngredientForm = ({
     }
   };
 
+  const handlePackageUnitChange = (unit: string) => {
+    onUpdate(index, 'package_unit', unit);
+    calculateManualCost();
+  };
+
   const handlePackagePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -239,10 +277,21 @@ const SupplierIngredientForm = ({
   const getManualProportionDisplay = () => {
     const packageQty = ingredient.package_quantity || 1;
     const usedQuantity = ingredient.quantity || 0;
+    const usedUnit = ingredient.unit;
+    const packageUnit = ingredient.package_unit || ingredient.unit;
     
     if (packageQty > 0 && usedQuantity > 0) {
-      const percentage = (usedQuantity / packageQty) * 100;
-      return `${usedQuantity} / ${packageQty} = ${percentage.toFixed(2)}%`;
+      // Mostrar conversión si las unidades son diferentes
+      if (usedUnit !== packageUnit) {
+        const convertedUsed = convertUnits(usedQuantity, usedUnit, packageUnit);
+        if (convertedUsed !== null) {
+          const percentage = (convertedUsed / packageQty) * 100;
+          return `${usedQuantity}${usedUnit} → ${convertedUsed.toFixed(2)}${packageUnit} = ${percentage.toFixed(2)}%`;
+        }
+      } else {
+        const percentage = (usedQuantity / packageQty) * 100;
+        return `${usedQuantity} / ${packageQty} = ${percentage.toFixed(2)}%`;
+      }
     }
     
     return null;
@@ -361,9 +410,21 @@ const SupplierIngredientForm = ({
                   placeholder="1000"
                   className="rounded-r-none"
                 />
-                <div className="bg-gray-100 border border-l-0 border-gray-300 rounded-r-md px-3 py-2 text-sm text-gray-600 min-w-[60px] flex items-center justify-center">
-                  {ingredient.unit}
-                </div>
+                <Select 
+                  value={ingredient.package_unit || ingredient.unit} 
+                  onValueChange={handlePackageUnitChange}
+                >
+                  <SelectTrigger className="rounded-l-none border-l-0 min-w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIT_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
