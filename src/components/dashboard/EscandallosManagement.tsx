@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,12 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Calculator, DollarSign } from "lucide-react";
+import { Plus, Edit, Trash2, Calculator, DollarSign, Eye, Send, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import ImageUpload from "./ImageUpload";
+import RecipeDetailView from "./RecipeDetailView";
 
 interface Escandallo {
   id: string;
@@ -22,6 +24,8 @@ interface Escandallo {
   profit_margin: number;
   notes: string;
   menu_item_id: string;
+  image_url?: string;
+  allergens?: string[];
   created_at: string;
   ingredients: RecipeIngredient[];
 }
@@ -33,18 +37,40 @@ interface RecipeIngredient {
   unit: string;
   unit_cost: number;
   total_cost: number;
+  supplier_product_id?: string;
+}
+
+interface SupplierProduct {
+  id: string;
+  name: string;
+  price: number;
+  package_size: number;
+  unit: string;
+  supplier: {
+    name: string;
+  };
 }
 
 interface EscandallosManagementProps {
   hotelId: string;
 }
 
+const ALLERGENS_OPTIONS = [
+  'Gluten', 'Crustáceos', 'Huevos', 'Pescado', 'Cacahuetes', 'Soja',
+  'Lácteos', 'Frutos secos', 'Apio', 'Mostaza', 'Sésamo', 'Sulfitos',
+  'Altramuces', 'Moluscos'
+];
+
 const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const [escandallos, setEscandallos] = useState<Escandallo[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailViewOpen, setDetailViewOpen] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<Escandallo | null>(null);
   const [editingEscandallo, setEditingEscandallo] = useState<Escandallo | null>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
+  const [sending, setSending] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -52,6 +78,8 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     portions: 1,
     notes: "",
     menu_item_id: "",
+    image_url: "",
+    allergens: [] as string[],
     ingredients: [] as RecipeIngredient[]
   });
 
@@ -59,6 +87,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     if (hotelId) {
       loadEscandallos();
       loadMenuItems();
+      loadSupplierProducts();
     }
   }, [hotelId]);
 
@@ -74,7 +103,8 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
             quantity,
             unit,
             unit_cost,
-            total_cost
+            total_cost,
+            supplier_product_id
           )
         `)
         .eq('hotel_id', hotelId)
@@ -115,6 +145,36 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     }
   };
 
+  const loadSupplierProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('supplier_products')
+        .select(`
+          id,
+          name,
+          price,
+          package_size,
+          unit,
+          suppliers!inner (
+            name,
+            hotel_id
+          )
+        `)
+        .eq('suppliers.hotel_id', hotelId);
+
+      if (error) throw error;
+      
+      const processedProducts = data?.map(product => ({
+        ...product,
+        supplier: { name: product.suppliers.name }
+      })) || [];
+      
+      setSupplierProducts(processedProducts);
+    } catch (error) {
+      console.error('Error loading supplier products:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -131,7 +191,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
         hotel_id: hotelId,
         total_cost: totalCost,
         selling_price: sellingPrice,
-        profit_margin: profitMargin
+        profit_margin: profitMargin,
+        image_url: formData.image_url || null,
+        allergens: formData.allergens.length > 0 ? formData.allergens : null
       };
 
       let escandalloId;
@@ -170,7 +232,8 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           quantity: ing.quantity,
           unit: ing.unit,
           unit_cost: ing.unit_cost,
-          total_cost: ing.total_cost
+          total_cost: ing.total_cost,
+          supplier_product_id: ing.supplier_product_id || null
         }));
 
         const { error: ingredientsError } = await supabase
@@ -178,6 +241,20 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           .insert(ingredientsData);
 
         if (ingredientsError) throw ingredientsError;
+      }
+
+      // Update ingredient-supplier mapping if needed
+      for (const ingredient of formData.ingredients) {
+        if (ingredient.supplier_product_id) {
+          await supabase
+            .from('ingredient_supplier_mapping')
+            .upsert({
+              hotel_id: hotelId,
+              ingredient_name: ingredient.ingredient_name,
+              supplier_product_id: ingredient.supplier_product_id,
+              conversion_factor: 1 // Default conversion factor
+            });
+        }
       }
 
       toast({
@@ -204,6 +281,8 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       portions: 1,
       notes: "",
       menu_item_id: "",
+      image_url: "",
+      allergens: [],
       ingredients: []
     });
     setEditingEscandallo(null);
@@ -216,9 +295,42 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       portions: escandallo.portions,
       notes: escandallo.notes || "",
       menu_item_id: escandallo.menu_item_id || "",
+      image_url: escandallo.image_url || "",
+      allergens: escandallo.allergens || [],
       ingredients: escandallo.ingredients || []
     });
     setDialogOpen(true);
+  };
+
+  const handleView = (escandallo: Escandallo) => {
+    setSelectedRecipe(escandallo);
+    setDetailViewOpen(true);
+  };
+
+  const handleSend = async (escandalloId: string) => {
+    try {
+      setSending(escandalloId);
+      
+      const { data, error } = await supabase.functions.invoke('send-recipe', {
+        body: { recipeId: escandalloId }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Éxito",
+        description: "Escandallo enviado correctamente",
+      });
+    } catch (error) {
+      console.error('Error sending recipe:', error);
+      toast({
+        title: "Error",
+        description: "Error al enviar el escandallo",
+        variant: "destructive",
+      });
+    } finally {
+      setSending(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -248,14 +360,15 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     }
   };
 
-  const addIngredient = () => {
+  const addIngredient = (type: 'manual' | 'supplier' = 'manual') => {
     const newIngredient: RecipeIngredient = {
       id: `temp-${Date.now()}`,
       ingredient_name: "",
       quantity: 0,
       unit: "g",
       unit_cost: 0,
-      total_cost: 0
+      total_cost: 0,
+      supplier_product_id: type === 'supplier' ? '' : undefined
     };
     setFormData(prev => ({
       ...prev,
@@ -266,6 +379,16 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
     const updatedIngredients = [...formData.ingredients];
     updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
+    
+    // Auto-calculate from supplier product
+    if (field === 'supplier_product_id' && value) {
+      const supplierProduct = supplierProducts.find(p => p.id === value);
+      if (supplierProduct) {
+        updatedIngredients[index].ingredient_name = supplierProduct.name;
+        updatedIngredients[index].unit = supplierProduct.unit;
+        updatedIngredients[index].unit_cost = supplierProduct.price / supplierProduct.package_size;
+      }
+    }
     
     if (field === 'quantity' || field === 'unit_cost') {
       updatedIngredients[index].total_cost = 
@@ -279,6 +402,15 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     setFormData(prev => ({
       ...prev,
       ingredients: prev.ingredients.filter((_, i) => i !== index)
+    }));
+  };
+
+  const toggleAllergen = (allergen: string) => {
+    setFormData(prev => ({
+      ...prev,
+      allergens: prev.allergens.includes(allergen)
+        ? prev.allergens.filter(a => a !== allergen)
+        : [...prev.allergens, allergen]
     }));
   };
 
@@ -307,7 +439,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               Nuevo Escandallo
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingEscandallo ? 'Editar Escandallo' : 'Nuevo Escandallo'}
@@ -316,75 +448,144 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                 Crea o edita un escandallo para analizar costos y rentabilidad
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Nombre del Escandallo</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    required
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Nombre del Escandallo</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="portions">Porciones</Label>
+                      <Input
+                        id="portions"
+                        type="number"
+                        min="1"
+                        value={formData.portions}
+                        onChange={(e) => setFormData(prev => ({ ...prev, portions: parseInt(e.target.value) }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="menu_item">Plato del Menú (Opcional)</Label>
+                    <Select value={formData.menu_item_id} onValueChange={(value) => setFormData(prev => ({ ...prev, menu_item_id: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar plato" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {menuItems.map(item => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name} - €{item.price}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notas</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Notas adicionales sobre la receta..."
+                    />
+                  </div>
+
+                  <ImageUpload
+                    currentImageUrl={formData.image_url}
+                    onImageUploaded={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+                    onImageRemoved={() => setFormData(prev => ({ ...prev, image_url: "" }))}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="portions">Porciones</Label>
-                  <Input
-                    id="portions"
-                    type="number"
-                    min="1"
-                    value={formData.portions}
-                    onChange={(e) => setFormData(prev => ({ ...prev, portions: parseInt(e.target.value) }))}
-                    required
-                  />
+
+                {/* Right Column */}
+                <div className="space-y-4">
+                  <div>
+                    <Label>Alérgenos</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2 max-h-32 overflow-y-auto border rounded-lg p-3">
+                      {ALLERGENS_OPTIONS.map((allergen) => (
+                        <div key={allergen} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={allergen}
+                            checked={formData.allergens.includes(allergen)}
+                            onCheckedChange={() => toggleAllergen(allergen)}
+                          />
+                          <Label
+                            htmlFor={allergen}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {allergen}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="menu_item">Plato del Menú (Opcional)</Label>
-                <Select value={formData.menu_item_id} onValueChange={(value) => setFormData(prev => ({ ...prev, menu_item_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar plato" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {menuItems.map(item => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} - €{item.price}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="notes">Notas</Label>
-                <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Notas adicionales sobre la receta..."
-                />
-              </div>
-
+              {/* Ingredients Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label>Ingredientes</Label>
-                  <Button type="button" onClick={addIngredient} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Añadir Ingrediente
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={() => addIngredient('manual')} size="sm" variant="outline">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Manual
+                    </Button>
+                    <Button type="button" onClick={() => addIngredient('supplier')} size="sm">
+                      <Package className="h-4 w-4 mr-2" />
+                      Desde Proveedor
+                    </Button>
+                  </div>
                 </div>
                 
                 {formData.ingredients.map((ingredient, index) => (
-                  <div key={ingredient.id} className="grid grid-cols-5 gap-2 items-end">
-                    <div>
-                      <Label>Ingrediente</Label>
-                      <Input
-                        value={ingredient.ingredient_name}
-                        onChange={(e) => updateIngredient(index, 'ingredient_name', e.target.value)}
-                        placeholder="Nombre del ingrediente"
-                      />
-                    </div>
+                  <div key={ingredient.id} className="grid grid-cols-6 gap-2 items-end p-4 bg-gray-50 rounded-lg">
+                    {ingredient.supplier_product_id !== undefined ? (
+                      // Supplier ingredient
+                      <div className="col-span-2">
+                        <Label>Producto de Proveedor</Label>
+                        <Select 
+                          value={ingredient.supplier_product_id} 
+                          onValueChange={(value) => updateIngredient(index, 'supplier_product_id', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar producto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {supplierProducts.map(product => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.supplier.name} - {product.name}
+                                <div className="text-xs text-gray-500">
+                                  €{product.price.toFixed(2)} / {product.package_size} {product.unit}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      // Manual ingredient
+                      <div>
+                        <Label>Ingrediente</Label>
+                        <Input
+                          value={ingredient.ingredient_name}
+                          onChange={(e) => updateIngredient(index, 'ingredient_name', e.target.value)}
+                          placeholder="Nombre del ingrediente"
+                        />
+                      </div>
+                    )}
+                    
                     <div>
                       <Label>Cantidad</Label>
                       <Input
@@ -394,30 +595,36 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                         onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
                       />
                     </div>
-                    <div>
-                      <Label>Unidad</Label>
-                      <Select value={ingredient.unit} onValueChange={(value) => updateIngredient(index, 'unit', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="g">Gramos</SelectItem>
-                          <SelectItem value="kg">Kilogramos</SelectItem>
-                          <SelectItem value="ml">Mililitros</SelectItem>
-                          <SelectItem value="l">Litros</SelectItem>
-                          <SelectItem value="ud">Unidades</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Precio/Unidad (€)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={ingredient.unit_cost}
-                        onChange={(e) => updateIngredient(index, 'unit_cost', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
+                    
+                    {ingredient.supplier_product_id === undefined && (
+                      <>
+                        <div>
+                          <Label>Unidad</Label>
+                          <Select value={ingredient.unit} onValueChange={(value) => updateIngredient(index, 'unit', value)}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="g">Gramos</SelectItem>
+                              <SelectItem value="kg">Kilogramos</SelectItem>
+                              <SelectItem value="ml">Mililitros</SelectItem>
+                              <SelectItem value="l">Litros</SelectItem>
+                              <SelectItem value="ud">Unidades</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Precio/Unidad (€)</Label>
+                          <Input
+                            type="number"
+                            step="0.001"
+                            value={ingredient.unit_cost}
+                            onChange={(e) => updateIngredient(index, 'unit_cost', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                      </>
+                    )}
+                    
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-medium">
                         €{ingredient.total_cost.toFixed(2)}
@@ -482,6 +689,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Imagen</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Porciones</TableHead>
                     <TableHead>Costo Total</TableHead>
@@ -494,7 +702,36 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                 <TableBody>
                   {escandallos.map((escandallo) => (
                     <TableRow key={escandallo.id}>
-                      <TableCell className="font-medium">{escandallo.name}</TableCell>
+                      <TableCell>
+                        {escandallo.image_url ? (
+                          <img 
+                            src={escandallo.image_url} 
+                            alt={escandallo.name}
+                            className="w-12 h-12 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Calculator className="h-6 w-6 text-gray-400" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {escandallo.name}
+                        {escandallo.allergens && escandallo.allergens.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {escandallo.allergens.slice(0, 2).map((allergen, index) => (
+                              <Badge key={index} variant="outline" className="text-xs bg-red-50 border-red-200">
+                                {allergen}
+                              </Badge>
+                            ))}
+                            {escandallo.allergens.length > 2 && (
+                              <Badge variant="outline" className="text-xs bg-red-50 border-red-200">
+                                +{escandallo.allergens.length - 2}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{escandallo.portions}</TableCell>
                       <TableCell>€{escandallo.total_cost?.toFixed(2) || '0.00'}</TableCell>
                       <TableCell>€{escandallo.selling_price?.toFixed(2) || '0.00'}</TableCell>
@@ -505,18 +742,37 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                       </TableCell>
                       <TableCell>{escandallo.ingredients?.length || 0}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleView(escandallo)}
+                            title="Ver detalles"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(escandallo)}
+                            title="Editar"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handleSend(escandallo.id)}
+                            disabled={sending === escandallo.id}
+                            title="Enviar"
+                          >
+                            <Send className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleDelete(escandallo.id)}
+                            title="Eliminar"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -530,6 +786,15 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           </Card>
         )}
       </div>
+
+      {/* Detail View Dialog */}
+      {selectedRecipe && (
+        <RecipeDetailView
+          open={detailViewOpen}
+          onOpenChange={setDetailViewOpen}
+          recipe={selectedRecipe}
+        />
+      )}
     </div>
   );
 };
