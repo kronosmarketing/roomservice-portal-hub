@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -453,7 +452,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
               }
               return item.toString();
             })
-            .join(', ');
+            .join('\n');
         }
       } catch (parseError) {
         console.log('Items no requieren parsing:', parseError);
