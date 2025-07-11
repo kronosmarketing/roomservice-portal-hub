@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,15 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Calculator, DollarSign, Eye, Send, Package } from "lucide-react";
+import { Plus, Edit, Trash2, Calculator, DollarSign, Eye, Send, Package, ChefHat } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ImageUpload from "./ImageUpload";
 import RecipeDetailView from "./RecipeDetailView";
+import RecipeStepsManager from "./RecipeStepsManager";
+import SupplierIngredientForm from "./SupplierIngredientForm";
+import PublishToMenuDialog from "./PublishToMenuDialog";
+
+interface RecipeStep {
+  id: string;
+  step_number: number;
+  description: string;
+  time_minutes?: number;
+  temperature?: number;
+}
 
 interface Escandallo {
   id: string;
@@ -28,6 +41,7 @@ interface Escandallo {
   allergens?: string[];
   created_at: string;
   ingredients: RecipeIngredient[];
+  recipe_steps?: RecipeStep[];
 }
 
 interface RecipeIngredient {
@@ -46,6 +60,7 @@ interface SupplierProduct {
   price: number;
   package_size: number;
   unit: string;
+  reference?: string;
   supplier: {
     name: string;
   };
@@ -66,6 +81,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailViewOpen, setDetailViewOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Escandallo | null>(null);
   const [editingEscandallo, setEditingEscandallo] = useState<Escandallo | null>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -80,7 +96,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     menu_item_id: "",
     image_url: "",
     allergens: [] as string[],
-    ingredients: [] as RecipeIngredient[]
+    customAllergens: "",
+    ingredients: [] as RecipeIngredient[],
+    recipe_steps: [] as RecipeStep[]
   });
 
   useEffect(() => {
@@ -105,6 +123,13 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
             unit_cost,
             total_cost,
             supplier_product_id
+          ),
+          recipe_steps (
+            id,
+            step_number,
+            description,
+            time_minutes,
+            temperature
           )
         `)
         .eq('hotel_id', hotelId)
@@ -114,7 +139,8 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
 
       const processedData = data?.map(item => ({
         ...item,
-        ingredients: item.recipe_ingredients || []
+        ingredients: item.recipe_ingredients || [],
+        recipe_steps: item.recipe_steps || []
       })) || [];
 
       setEscandallos(processedData);
@@ -155,6 +181,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           price,
           package_size,
           unit,
+          reference,
           suppliers!inner (
             name,
             hotel_id
@@ -183,6 +210,13 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       const sellingPrice = selectedMenuItem?.price || 0;
       const profitMargin = sellingPrice > 0 ? ((sellingPrice - totalCost) / sellingPrice) * 100 : 0;
 
+      // Combine predefined and custom allergens
+      const allAllergens = [...formData.allergens];
+      if (formData.customAllergens.trim()) {
+        const customList = formData.customAllergens.split(',').map(a => a.trim()).filter(a => a);
+        allAllergens.push(...customList);
+      }
+
       const escandalloData = {
         name: formData.name,
         portions: formData.portions,
@@ -193,7 +227,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
         selling_price: sellingPrice,
         profit_margin: profitMargin,
         image_url: formData.image_url || null,
-        allergens: formData.allergens.length > 0 ? formData.allergens : null
+        allergens: allAllergens.length > 0 ? allAllergens : null
       };
 
       let escandalloId;
@@ -243,6 +277,30 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
         if (ingredientsError) throw ingredientsError;
       }
 
+      // Update recipe steps
+      if (editingEscandallo) {
+        await supabase
+          .from('recipe_steps')
+          .delete()
+          .eq('recipe_id', escandalloId);
+      }
+
+      if (formData.recipe_steps.length > 0) {
+        const stepsData = formData.recipe_steps.map(step => ({
+          recipe_id: escandalloId,
+          step_number: step.step_number,
+          description: step.description,
+          time_minutes: step.time_minutes || null,
+          temperature: step.temperature || null
+        }));
+
+        const { error: stepsError } = await supabase
+          .from('recipe_steps')
+          .insert(stepsData);
+
+        if (stepsError) throw stepsError;
+      }
+
       // Update ingredient-supplier mapping if needed
       for (const ingredient of formData.ingredients) {
         if (ingredient.supplier_product_id) {
@@ -252,7 +310,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               hotel_id: hotelId,
               ingredient_name: ingredient.ingredient_name,
               supplier_product_id: ingredient.supplier_product_id,
-              conversion_factor: 1 // Default conversion factor
+              conversion_factor: 1
             });
         }
       }
@@ -283,7 +341,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       menu_item_id: "",
       image_url: "",
       allergens: [],
-      ingredients: []
+      customAllergens: "",
+      ingredients: [],
+      recipe_steps: []
     });
     setEditingEscandallo(null);
   };
@@ -297,7 +357,9 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       menu_item_id: escandallo.menu_item_id || "",
       image_url: escandallo.image_url || "",
       allergens: escandallo.allergens || [],
-      ingredients: escandallo.ingredients || []
+      customAllergens: "",
+      ingredients: escandallo.ingredients || [],
+      recipe_steps: escandallo.recipe_steps || []
     });
     setDialogOpen(true);
   };
@@ -305,6 +367,11 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const handleView = (escandallo: Escandallo) => {
     setSelectedRecipe(escandallo);
     setDetailViewOpen(true);
+  };
+
+  const handlePublish = (escandallo: Escandallo) => {
+    setSelectedRecipe(escandallo);
+    setPublishDialogOpen(true);
   };
 
   const handleSend = async (escandalloId: string) => {
@@ -380,16 +447,6 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     const updatedIngredients = [...formData.ingredients];
     updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
     
-    // Auto-calculate from supplier product
-    if (field === 'supplier_product_id' && value) {
-      const supplierProduct = supplierProducts.find(p => p.id === value);
-      if (supplierProduct) {
-        updatedIngredients[index].ingredient_name = supplierProduct.name;
-        updatedIngredients[index].unit = supplierProduct.unit;
-        updatedIngredients[index].unit_cost = supplierProduct.price / supplierProduct.package_size;
-      }
-    }
-    
     if (field === 'quantity' || field === 'unit_cost') {
       updatedIngredients[index].total_cost = 
         updatedIngredients[index].quantity * updatedIngredients[index].unit_cost;
@@ -439,7 +496,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               Nuevo Escandallo
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingEscandallo ? 'Editar Escandallo' : 'Nuevo Escandallo'}
@@ -448,10 +505,17 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                 Crea o edita un escandallo para analizar costos y rentabilidad
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Column */}
-                <div className="space-y-4">
+            
+            <form onSubmit={handleSubmit}>
+              <Tabs defaultValue="general" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="ingredients">Ingredientes</TabsTrigger>
+                  <TabsTrigger value="steps">Pasos</TabsTrigger>
+                  <TabsTrigger value="allergens">Alérgenos</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="general" className="space-y-4 mt-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="name">Nombre del Escandallo</Label>
@@ -506,13 +570,61 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                     onImageUploaded={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
                     onImageRemoved={() => setFormData(prev => ({ ...prev, image_url: "" }))}
                   />
-                </div>
+                </TabsContent>
 
-                {/* Right Column */}
-                <div className="space-y-4">
+                <TabsContent value="ingredients" className="space-y-4 mt-6">
+                  <div className="flex items-center justify-between">
+                    <Label>Ingredientes</Label>
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={() => addIngredient('manual')} size="sm" variant="outline">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Manual
+                      </Button>
+                      <Button type="button" onClick={() => addIngredient('supplier')} size="sm">
+                        <Package className="h-4 w-4 mr-2" />
+                        Desde Proveedor
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {formData.ingredients.map((ingredient, index) => (
+                      <SupplierIngredientForm
+                        key={ingredient.id}
+                        ingredient={ingredient}
+                        index={index}
+                        supplierProducts={supplierProducts}
+                        onUpdate={updateIngredient}
+                        onRemove={removeIngredient}
+                      />
+                    ))}
+                  </div>
+
+                  {formData.ingredients.length > 0 && (
+                    <Card className="bg-gray-50">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Costo Total:</span>
+                          <span className="text-lg font-bold">
+                            €{formData.ingredients.reduce((sum, ing) => sum + ing.total_cost, 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="steps" className="space-y-4 mt-6">
+                  <RecipeStepsManager
+                    steps={formData.recipe_steps}
+                    onStepsChange={(steps) => setFormData(prev => ({ ...prev, recipe_steps: steps }))}
+                  />
+                </TabsContent>
+
+                <TabsContent value="allergens" className="space-y-4 mt-6">
                   <div>
-                    <Label>Alérgenos</Label>
-                    <div className="grid grid-cols-2 gap-2 mt-2 max-h-32 overflow-y-auto border rounded-lg p-3">
+                    <Label>Alérgenos Predefinidos</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto border rounded-lg p-3">
                       {ALLERGENS_OPTIONS.map((allergen) => (
                         <div key={allergen} className="flex items-center space-x-2">
                           <Checkbox
@@ -530,130 +642,23 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
                       ))}
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Ingredients Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label>Ingredientes</Label>
-                  <div className="flex gap-2">
-                    <Button type="button" onClick={() => addIngredient('manual')} size="sm" variant="outline">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Manual
-                    </Button>
-                    <Button type="button" onClick={() => addIngredient('supplier')} size="sm">
-                      <Package className="h-4 w-4 mr-2" />
-                      Desde Proveedor
-                    </Button>
+                  <div>
+                    <Label htmlFor="customAllergens">Alérgenos Personalizados</Label>
+                    <Input
+                      id="customAllergens"
+                      value={formData.customAllergens}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customAllergens: e.target.value }))}
+                      placeholder="Ej: Miel, Quinoa, Coco (separados por comas)"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Separar múltiples alérgenos con comas
+                    </p>
                   </div>
-                </div>
-                
-                {formData.ingredients.map((ingredient, index) => (
-                  <div key={ingredient.id} className="grid grid-cols-6 gap-2 items-end p-4 bg-gray-50 rounded-lg">
-                    {ingredient.supplier_product_id !== undefined ? (
-                      // Supplier ingredient
-                      <div className="col-span-2">
-                        <Label>Producto de Proveedor</Label>
-                        <Select 
-                          value={ingredient.supplier_product_id} 
-                          onValueChange={(value) => updateIngredient(index, 'supplier_product_id', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {supplierProducts.map(product => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.supplier.name} - {product.name}
-                                <div className="text-xs text-gray-500">
-                                  €{product.price.toFixed(2)} / {product.package_size} {product.unit}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : (
-                      // Manual ingredient
-                      <div>
-                        <Label>Ingrediente</Label>
-                        <Input
-                          value={ingredient.ingredient_name}
-                          onChange={(e) => updateIngredient(index, 'ingredient_name', e.target.value)}
-                          placeholder="Nombre del ingrediente"
-                        />
-                      </div>
-                    )}
-                    
-                    <div>
-                      <Label>Cantidad</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={ingredient.quantity}
-                        onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    
-                    {ingredient.supplier_product_id === undefined && (
-                      <>
-                        <div>
-                          <Label>Unidad</Label>
-                          <Select value={ingredient.unit} onValueChange={(value) => updateIngredient(index, 'unit', value)}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="g">Gramos</SelectItem>
-                              <SelectItem value="kg">Kilogramos</SelectItem>
-                              <SelectItem value="ml">Mililitros</SelectItem>
-                              <SelectItem value="l">Litros</SelectItem>
-                              <SelectItem value="ud">Unidades</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Precio/Unidad (€)</Label>
-                          <Input
-                            type="number"
-                            step="0.001"
-                            value={ingredient.unit_cost}
-                            onChange={(e) => updateIngredient(index, 'unit_cost', parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-medium">
-                        €{ingredient.total_cost.toFixed(2)}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeIngredient(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                </TabsContent>
+              </Tabs>
 
-              {formData.ingredients.length > 0 && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">Costo Total:</span>
-                    <span className="text-lg font-bold">
-                      €{formData.ingredients.reduce((sum, ing) => sum + ing.total_cost, 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancelar
                 </Button>
@@ -666,7 +671,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
         </Dialog>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-6">
         {escandallos.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
@@ -678,7 +683,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
             </CardContent>
           </Card>
         ) : (
-          <Card>
+          <Card className="shadow-lg">
             <CardHeader>
               <CardTitle>Lista de Escandallos</CardTitle>
               <CardDescription>
@@ -686,102 +691,122 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Imagen</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Porciones</TableHead>
-                    <TableHead>Costo Total</TableHead>
-                    <TableHead>Precio Venta</TableHead>
-                    <TableHead>Margen (%)</TableHead>
-                    <TableHead>Ingredientes</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {escandallos.map((escandallo) => (
-                    <TableRow key={escandallo.id}>
-                      <TableCell>
-                        {escandallo.image_url ? (
-                          <img 
-                            src={escandallo.image_url} 
-                            alt={escandallo.name}
-                            className="w-12 h-12 object-cover rounded-lg"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <Calculator className="h-6 w-6 text-gray-400" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {escandallo.name}
-                        {escandallo.allergens && escandallo.allergens.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {escandallo.allergens.slice(0, 2).map((allergen, index) => (
-                              <Badge key={index} variant="outline" className="text-xs bg-red-50 border-red-200">
-                                {allergen}
-                              </Badge>
-                            ))}
-                            {escandallo.allergens.length > 2 && (
-                              <Badge variant="outline" className="text-xs bg-red-50 border-red-200">
-                                +{escandallo.allergens.length - 2}
-                              </Badge>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20">Imagen</TableHead>
+                      <TableHead className="min-w-[200px]">Nombre</TableHead>
+                      <TableHead className="w-24">Porciones</TableHead>
+                      <TableHead className="w-28">Costo Total</TableHead>
+                      <TableHead className="w-28">Precio Venta</TableHead>
+                      <TableHead className="w-24">Margen (%)</TableHead>
+                      <TableHead className="w-24">Ingredientes</TableHead>
+                      <TableHead className="w-20">Pasos</TableHead>
+                      <TableHead className="w-48">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {escandallos.map((escandallo) => (
+                      <TableRow key={escandallo.id} className="hover:bg-gray-50">
+                        <TableCell>
+                          {escandallo.image_url ? (
+                            <img 
+                              src={escandallo.image_url} 
+                              alt={escandallo.name}
+                              className="w-12 h-12 object-cover rounded-lg shadow-sm"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Calculator className="h-6 w-6 text-gray-400" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{escandallo.name}</div>
+                            {escandallo.allergens && escandallo.allergens.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {escandallo.allergens.slice(0, 2).map((allergen, index) => (
+                                  <Badge key={index} variant="outline" className="text-xs bg-red-50 border-red-200">
+                                    {allergen}
+                                  </Badge>
+                                ))}
+                                {escandallo.allergens.length > 2 && (
+                                  <Badge variant="outline" className="text-xs bg-red-50 border-red-200">
+                                    +{escandallo.allergens.length - 2}
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{escandallo.portions}</TableCell>
-                      <TableCell>€{escandallo.total_cost?.toFixed(2) || '0.00'}</TableCell>
-                      <TableCell>€{escandallo.selling_price?.toFixed(2) || '0.00'}</TableCell>
-                      <TableCell>
-                        <Badge variant={escandallo.profit_margin > 20 ? "default" : "destructive"}>
-                          {escandallo.profit_margin?.toFixed(1) || '0.0'}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{escandallo.ingredients?.length || 0}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleView(escandallo)}
-                            title="Ver detalles"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(escandallo)}
-                            title="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSend(escandallo.id)}
-                            disabled={sending === escandallo.id}
-                            title="Enviar"
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(escandallo.id)}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                        <TableCell className="text-center font-medium">{escandallo.portions}</TableCell>
+                        <TableCell className="font-mono">€{escandallo.total_cost?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell className="font-mono">€{escandallo.selling_price?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell>
+                          <Badge variant={escandallo.profit_margin > 20 ? "default" : "destructive"}>
+                            {escandallo.profit_margin?.toFixed(1) || '0.0'}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{escandallo.ingredients?.length || 0}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{escandallo.recipe_steps?.length || 0}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleView(escandallo)}
+                              title="Ver detalles"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(escandallo)}
+                              title="Editar"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePublish(escandallo)}
+                              title="Publicar en Menú"
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              <ChefHat className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSend(escandallo.id)}
+                              disabled={sending === escandallo.id}
+                              title="Enviar"
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(escandallo.id)}
+                              title="Eliminar"
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -793,6 +818,20 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
           open={detailViewOpen}
           onOpenChange={setDetailViewOpen}
           recipe={selectedRecipe}
+        />
+      )}
+
+      {/* Publish to Menu Dialog */}
+      {selectedRecipe && (
+        <PublishToMenuDialog
+          open={publishDialogOpen}
+          onOpenChange={setPublishDialogOpen}
+          escandallo={selectedRecipe}
+          hotelId={hotelId}
+          onPublished={() => {
+            loadEscandallos();
+            loadMenuItems();
+          }}
         />
       )}
     </div>
