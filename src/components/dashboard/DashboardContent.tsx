@@ -3,7 +3,9 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OrdersManagement from "./OrdersManagement";
 import MenuManagement from "./MenuManagement";
-import { Package, UtensilsCrossed } from "lucide-react";
+import EscandallosManagement from "./EscandallosManagement";
+import ProveedoresManagement from "./ProveedoresManagement";
+import { Package, UtensilsCrossed, Calculator, Building2 } from "lucide-react";
 
 interface DashboardUser {
   userRole: string;
@@ -32,14 +34,22 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
           </div>
 
           <Tabs defaultValue="orders" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="orders" className="flex items-center gap-2">
                 <Package className="h-4 w-4" />
-                Pedidos
+                <span className="hidden sm:inline">Pedidos</span>
               </TabsTrigger>
               <TabsTrigger value="menu" className="flex items-center gap-2">
                 <UtensilsCrossed className="h-4 w-4" />
-                Gestión de Menú
+                <span className="hidden sm:inline">Menú</span>
+              </TabsTrigger>
+              <TabsTrigger value="escandallos" className="flex items-center gap-2">
+                <Calculator className="h-4 w-4" />
+                <span className="hidden sm:inline">Escandallos</span>
+              </TabsTrigger>
+              <TabsTrigger value="proveedores" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Proveedores</span>
               </TabsTrigger>
             </TabsList>
 
@@ -49,6 +59,14 @@ const DashboardContent = ({ user }: DashboardContentProps) => {
 
             <TabsContent value="menu">
               <MenuManagement hotelId={user.hotelId} />
+            </TabsContent>
+
+            <TabsContent value="escandallos">
+              <EscandallosManagement hotelId={user.hotelId} />
+            </TabsContent>
+
+            <TabsContent value="proveedores">
+              <ProveedoresManagement hotelId={user.hotelId} />
             </TabsContent>
           </Tabs>
         </div>

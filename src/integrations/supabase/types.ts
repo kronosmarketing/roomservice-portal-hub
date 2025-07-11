@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       archived_orders: {
@@ -126,6 +131,48 @@ export type Database = {
         }
         Relationships: []
       }
+      ingredient_supplier_mapping: {
+        Row: {
+          conversion_factor: number
+          created_at: string
+          hotel_id: string
+          id: string
+          ingredient_name: string
+          supplier_product_id: string
+        }
+        Insert: {
+          conversion_factor?: number
+          created_at?: string
+          hotel_id: string
+          id?: string
+          ingredient_name: string
+          supplier_product_id: string
+        }
+        Update: {
+          conversion_factor?: number
+          created_at?: string
+          hotel_id?: string
+          id?: string
+          ingredient_name?: string
+          supplier_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_supplier_mapping_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredient_supplier_mapping_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_categories: {
         Row: {
           created_at: string
@@ -240,35 +287,48 @@ export type Database = {
       order_items: {
         Row: {
           created_at: string
+          hotel_id: string
           id: string
           menu_item_id: string
-          order_id: string
+          order_id: string | null
           quantity: number
+          room_number: string | null
           special_instructions: string | null
           total_price: number
           unit_price: number
         }
         Insert: {
           created_at?: string
+          hotel_id: string
           id?: string
           menu_item_id: string
-          order_id: string
+          order_id?: string | null
           quantity?: number
+          room_number?: string | null
           special_instructions?: string | null
           total_price: number
           unit_price: number
         }
         Update: {
           created_at?: string
+          hotel_id?: string
           id?: string
           menu_item_id?: string
-          order_id?: string
+          order_id?: string | null
           quantity?: number
+          room_number?: string | null
           special_instructions?: string | null
           total_price?: number
           unit_price?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_order_items_hotel_id"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_order_items_menu_item_id"
             columns: ["menu_item_id"]
@@ -312,6 +372,7 @@ export type Database = {
           hotel_id: string
           id: string
           notes: string | null
+          order_id: string | null
           payment_method: string | null
           room_number: string
           special_instructions: string | null
@@ -324,6 +385,7 @@ export type Database = {
           hotel_id: string
           id?: string
           notes?: string | null
+          order_id?: string | null
           payment_method?: string | null
           room_number: string
           special_instructions?: string | null
@@ -336,6 +398,7 @@ export type Database = {
           hotel_id?: string
           id?: string
           notes?: string | null
+          order_id?: string | null
           payment_method?: string | null
           room_number?: string
           special_instructions?: string | null
@@ -349,6 +412,194 @@ export type Database = {
             columns: ["hotel_id"]
             isOneToOne: false
             referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printershotels: {
+        Row: {
+          created_at: string
+          hotel_id: string
+          id: string
+          name_printer: string | null
+          printer_id: string | null
+          printnode_api_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hotel_id: string
+          id?: string
+          name_printer?: string | null
+          printer_id?: string | null
+          printnode_api_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hotel_id?: string
+          id?: string
+          name_printer?: string | null
+          printer_id?: string | null
+          printnode_api_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recipe_ingredients: {
+        Row: {
+          created_at: string
+          id: string
+          ingredient_name: string
+          package_quantity: number
+          price_unit: string
+          quantity: number
+          recipe_id: string
+          supplier_product_id: string | null
+          total_cost: number | null
+          unit: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ingredient_name: string
+          package_quantity?: number
+          price_unit?: string
+          quantity: number
+          recipe_id: string
+          supplier_product_id?: string | null
+          total_cost?: number | null
+          unit?: string
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ingredient_name?: string
+          package_quantity?: number
+          price_unit?: string
+          quantity?: number
+          recipe_id?: string
+          supplier_product_id?: string | null
+          total_cost?: number | null
+          unit?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_scandallos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_ingredients_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_scandallos: {
+        Row: {
+          allergens: string[] | null
+          created_at: string
+          hotel_id: string
+          id: string
+          image_url: string | null
+          menu_item_id: string | null
+          name: string
+          notes: string | null
+          portions: number
+          profit_margin: number | null
+          selling_price: number | null
+          total_cost: number | null
+          updated_at: string
+        }
+        Insert: {
+          allergens?: string[] | null
+          created_at?: string
+          hotel_id: string
+          id?: string
+          image_url?: string | null
+          menu_item_id?: string | null
+          name: string
+          notes?: string | null
+          portions?: number
+          profit_margin?: number | null
+          selling_price?: number | null
+          total_cost?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allergens?: string[] | null
+          created_at?: string
+          hotel_id?: string
+          id?: string
+          image_url?: string | null
+          menu_item_id?: string | null
+          name?: string
+          notes?: string | null
+          portions?: number
+          profit_margin?: number | null
+          selling_price?: number | null
+          total_cost?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_scandallos_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_scandallos_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_steps: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          recipe_id: string
+          step_number: number
+          temperature: number | null
+          time_minutes: number | null
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          recipe_id: string
+          step_number: number
+          temperature?: number | null
+          time_minutes?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          recipe_id?: string
+          step_number?: number
+          temperature?: number | null
+          time_minutes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_steps_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_scandallos"
             referencedColumns: ["id"]
           },
         ]
@@ -391,6 +642,91 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      supplier_products: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          package_size: number
+          price: number
+          reference: string | null
+          supplier_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          package_size?: number
+          price?: number
+          reference?: string | null
+          supplier_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          package_size?: number
+          price?: number
+          reference?: string | null
+          supplier_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          hotel_id: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          hotel_id: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          hotel_id?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -467,6 +803,10 @@ export type Database = {
           window_minutes?: number
         }
         Returns: boolean
+      }
+      cleanup_orphaned_order_items: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       delete_order_with_items: {
         Args: { order_id_param: string; hotel_id_param: string }
@@ -624,21 +964,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -656,14 +1000,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -679,14 +1025,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -702,14 +1050,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -717,14 +1067,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
