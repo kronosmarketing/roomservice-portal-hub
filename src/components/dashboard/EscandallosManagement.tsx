@@ -205,6 +205,12 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      console.log('💾 Iniciando guardado de escandallo:', {
+        name: formData.name,
+        ingredients: formData.ingredients.length,
+        image_url: formData.image_url
+      });
+
       const totalCost = formData.ingredients.reduce((sum, ing) => sum + ing.total_cost, 0);
       const selectedMenuItem = menuItems.find(item => item.id === formData.menu_item_id);
       const sellingPrice = selectedMenuItem?.price || 0;
@@ -334,6 +340,7 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   };
 
   const resetForm = () => {
+    console.log('🔄 Reseteando formulario');
     setFormData({
       name: "",
       portions: 1,
@@ -352,14 +359,18 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     console.log('🔄 Añadiendo ingrediente tipo:', type);
     
     const newIngredient: RecipeIngredient = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${Date.now()}-${Math.random()}`,
       ingredient_name: "",
       quantity: 1,
       unit: "g",
       unit_cost: 0,
       total_cost: 0,
       type: type,
-      ...(type === 'supplier' && { supplier_product_id: "" })
+      ...(type === 'supplier' && { supplier_product_id: "" }),
+      ...(type === 'manual' && { 
+        package_quantity: 1000,
+        package_price: 0
+      })
     };
     
     console.log('✅ Nuevo ingrediente creado:', newIngredient);
@@ -373,29 +384,24 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
     console.log('🔄 Actualizando ingrediente:', { index, field, value });
     
-    const updatedIngredients = [...formData.ingredients];
-    
-    // Manejo especial para campos numéricos
-    if (field === 'quantity' || field === 'unit_cost') {
-      const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
-      updatedIngredients[index] = { ...updatedIngredients[index], [field]: numValue };
+    setFormData(prev => {
+      const updatedIngredients = [...prev.ingredients];
+      updatedIngredients[index] = { 
+        ...updatedIngredients[index], 
+        [field]: value 
+      };
       
-      // Solo auto-calcular para ingredientes manuales
-      const isSupplierIngredient = updatedIngredients[index].type === 'supplier';
-      if (!isSupplierIngredient && field === 'unit_cost') {
-        updatedIngredients[index].total_cost = 
-          updatedIngredients[index].quantity * numValue;
-      }
-    } else {
-      updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
-    }
-    
-    console.log('✅ Ingrediente actualizado:', updatedIngredients[index]);
-    
-    setFormData(prev => ({ ...prev, ingredients: updatedIngredients }));
+      console.log('✅ Ingrediente actualizado:', updatedIngredients[index]);
+      
+      return {
+        ...prev,
+        ingredients: updatedIngredients
+      };
+    });
   };
 
   const removeIngredient = (index: number) => {
+    console.log('🗑️ Eliminando ingrediente:', index);
     setFormData(prev => ({
       ...prev,
       ingredients: prev.ingredients.filter((_, i) => i !== index)
@@ -412,13 +418,21 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
   };
 
   const handleEdit = (escandallo: Escandallo) => {
+    console.log('✏️ Editando escandallo:', escandallo.name);
     setEditingEscandallo(escandallo);
     
     // Ensure ingredients have the type property when editing
     const ingredientsWithType = escandallo.ingredients?.map(ingredient => ({
       ...ingredient,
-      type: ingredient.supplier_product_id !== undefined ? 'supplier' as const : 'manual' as const
+      type: ingredient.supplier_product_id ? 'supplier' as const : 'manual' as const,
+      // Add default values for manual ingredients if missing
+      ...((!ingredient.supplier_product_id) && {
+        package_quantity: ingredient.package_quantity || 1000,
+        package_price: ingredient.package_price || 0
+      })
     })) || [];
+    
+    console.log('📝 Ingredientes procesados para edición:', ingredientsWithType);
     
     setFormData({
       name: escandallo.name,
@@ -590,8 +604,14 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
 
                 <ImageUpload
                   currentImageUrl={formData.image_url}
-                  onImageUploaded={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
-                  onImageRemoved={() => setFormData(prev => ({ ...prev, image_url: "" }))}
+                  onImageUploaded={(url) => {
+                    console.log('🖼️ Imagen cargada en formulario:', url);
+                    setFormData(prev => ({ ...prev, image_url: url }));
+                  }}
+                  onImageRemoved={() => {
+                    console.log('🗑️ Imagen eliminada del formulario');
+                    setFormData(prev => ({ ...prev, image_url: "" }));
+                  }}
                 />
               </div>
 

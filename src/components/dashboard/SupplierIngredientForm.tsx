@@ -15,7 +15,10 @@ interface RecipeIngredient {
   unit_cost: number;
   total_cost: number;
   supplier_product_id?: string;
-  type?: 'manual' | 'supplier'; // Add type property
+  type: 'manual' | 'supplier';
+  // Campos adicionales para ingredientes manuales
+  package_quantity?: number;
+  package_price?: number;
 }
 
 interface SupplierProduct {
@@ -67,33 +70,24 @@ const SupplierIngredientForm = ({
   onUpdate, 
   onRemove 
 }: SupplierIngredientFormProps) => {
-  // Estados locales para manejo de inputs temporalmente vacíos
-  const [tempQuantity, setTempQuantity] = useState<string>(ingredient.quantity?.toString() || '1');
-  const [tempUnitCost, setTempUnitCost] = useState<string>(ingredient.unit_cost?.toString() || '0');
-
-  // CORRECCIÓN CRÍTICA: Usar la propiedad type para detectar correctamente ingredientes de proveedor
   const isSupplierIngredient = ingredient.type === 'supplier';
-  
   const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
 
-  console.log('SupplierIngredientForm Debug:', {
-    ingredientId: ingredient.id,
+  console.log('🔄 SupplierIngredientForm Debug:', {
+    index,
     type: ingredient.type,
-    supplier_product_id: ingredient.supplier_product_id,
     isSupplierIngredient,
+    ingredient_name: ingredient.ingredient_name,
+    supplier_product_id: ingredient.supplier_product_id,
     selectedProduct: selectedProduct?.name || 'No seleccionado',
     quantity: ingredient.quantity,
-    unit: ingredient.unit
+    unit: ingredient.unit,
+    package_quantity: ingredient.package_quantity,
+    package_price: ingredient.package_price
   });
 
-  // Sincronizar estados locales cuando el ingrediente cambie
-  useEffect(() => {
-    setTempQuantity(ingredient.quantity?.toString() || '1');
-    setTempUnitCost(ingredient.unit_cost?.toString() || '0');
-  }, [ingredient.quantity, ingredient.unit_cost]);
-
   const handleSupplierProductChange = (productId: string) => {
-    console.log('🔄 Seleccionando producto:', productId);
+    console.log('🔄 Seleccionando producto de proveedor:', productId);
     const product = supplierProducts.find(p => p.id === productId);
     
     if (product) {
@@ -105,22 +99,22 @@ const SupplierIngredientForm = ({
         supplier: product.supplier.name
       });
 
-      // Actualizar todos los campos de forma atómica
+      // Actualizar todos los campos de forma secuencial
       onUpdate(index, 'supplier_product_id', productId);
       onUpdate(index, 'ingredient_name', product.name);
       onUpdate(index, 'unit', product.unit);
       
-      // Calcular costo inmediatamente después de la actualización
+      // Calcular costo inmediatamente
       setTimeout(() => {
-        calculateCost(ingredient.quantity, product.unit, product);
-      }, 0);
+        calculateSupplierCost(ingredient.quantity, product.unit, product);
+      }, 100);
     }
   };
 
-  const calculateCost = (quantity: number, unit: string, product?: SupplierProduct) => {
+  const calculateSupplierCost = (quantity: number, unit: string, product?: SupplierProduct) => {
     const currentProduct = product || selectedProduct;
     if (!currentProduct || !quantity || quantity <= 0) {
-      console.log('❌ No se puede calcular costo:', { currentProduct: !!currentProduct, quantity });
+      console.log('❌ No se puede calcular costo de proveedor');
       onUpdate(index, 'unit_cost', 0);
       onUpdate(index, 'total_cost', 0);
       return;
@@ -150,7 +144,7 @@ const SupplierIngredientForm = ({
     // Calculate total cost
     const totalCost = usedQuantityInBaseUnit * pricePerBaseUnit;
     
-    console.log('💰 Cálculo de costo:', {
+    console.log('💰 Cálculo de costo de proveedor:', {
       quantity,
       unit,
       usedQuantityInBaseUnit,
@@ -163,53 +157,78 @@ const SupplierIngredientForm = ({
     onUpdate(index, 'total_cost', totalCost);
   };
 
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setTempQuantity(value);
+  const calculateManualCost = () => {
+    const packageQty = ingredient.package_quantity || 1;
+    const packagePrice = ingredient.package_price || 0;
+    const usedQuantity = ingredient.quantity || 0;
+
+    if (packageQty > 0 && packagePrice > 0 && usedQuantity > 0) {
+      // Calcular proporción usada
+      const proportion = usedQuantity / packageQty;
+      
+      // Calcular costo unitario (precio por unidad usada)
+      const unitCost = packagePrice / packageQty;
+      
+      // Calcular costo total
+      const totalCost = usedQuantity * unitCost;
+
+      console.log('💰 Cálculo de costo manual:', {
+        packageQty,
+        packagePrice,
+        usedQuantity,
+        proportion,
+        unitCost,
+        totalCost
+      });
+
+      onUpdate(index, 'unit_cost', unitCost);
+      onUpdate(index, 'total_cost', totalCost);
+    }
   };
 
-  const handleQuantityBlur = () => {
-    const numValue = tempQuantity === '' ? 1 : parseFloat(tempQuantity);
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numValue = value === '' ? 0 : parseFloat(value);
+    
     if (!isNaN(numValue) && numValue >= 0) {
       onUpdate(index, 'quantity', numValue);
+      
+      // Recalcular costos
       if (isSupplierIngredient && selectedProduct) {
-        calculateCost(numValue, ingredient.unit);
+        calculateSupplierCost(numValue, ingredient.unit);
       } else if (!isSupplierIngredient) {
-        // Para ingredientes manuales, recalcular costo total
-        const totalCost = numValue * ingredient.unit_cost;
-        onUpdate(index, 'total_cost', totalCost);
+        calculateManualCost();
       }
-    } else {
-      setTempQuantity('1');
-      onUpdate(index, 'quantity', 1);
     }
   };
 
   const handleUnitChange = (unit: string) => {
     onUpdate(index, 'unit', unit);
+    
     if (isSupplierIngredient && selectedProduct) {
-      calculateCost(ingredient.quantity, unit);
+      calculateSupplierCost(ingredient.quantity, unit);
     } else if (!isSupplierIngredient) {
-      // Para ingredientes manuales, solo recalcular costo total
-      const totalCost = ingredient.quantity * ingredient.unit_cost;
-      onUpdate(index, 'total_cost', totalCost);
+      calculateManualCost();
     }
   };
 
-  const handleUnitCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePackageQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setTempUnitCost(value);
+    const numValue = value === '' ? 0 : parseFloat(value);
+    
+    if (!isNaN(numValue) && numValue >= 0) {
+      onUpdate(index, 'package_quantity', numValue);
+      calculateManualCost();
+    }
   };
 
-  const handleUnitCostBlur = () => {
-    const numValue = tempUnitCost === '' ? 0 : parseFloat(tempUnitCost);
+  const handlePackagePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numValue = value === '' ? 0 : parseFloat(value);
+    
     if (!isNaN(numValue) && numValue >= 0) {
-      onUpdate(index, 'unit_cost', numValue);
-      const totalCost = ingredient.quantity * numValue;
-      onUpdate(index, 'total_cost', totalCost);
-    } else {
-      setTempUnitCost('0');
-      onUpdate(index, 'unit_cost', 0);
+      onUpdate(index, 'package_price', numValue);
+      calculateManualCost();
     }
   };
 
@@ -231,8 +250,20 @@ const SupplierIngredientForm = ({
     return `${ingredient.quantity} ${ingredient.unit} → ${usedQuantityInBaseUnit} ${usedUnitConversion.baseUnit} = ${ratio.toFixed(4)} del paquete`;
   };
 
+  const getManualProportionDisplay = () => {
+    const packageQty = ingredient.package_quantity || 1;
+    const usedQuantity = ingredient.quantity || 0;
+    
+    if (packageQty > 0 && usedQuantity > 0) {
+      const percentage = (usedQuantity / packageQty) * 100;
+      return `${usedQuantity} / ${packageQty} = ${percentage.toFixed(2)}%`;
+    }
+    
+    return null;
+  };
+
   return (
-    <Card className={`${isSupplierIngredient ? 'border-blue-200 bg-blue-50' : 'border-gray-200'}`}>
+    <Card className={`${isSupplierIngredient ? 'border-blue-200 bg-blue-50' : 'border-green-200 bg-green-50'}`}>
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h4 className="font-medium text-sm">
@@ -309,10 +340,9 @@ const SupplierIngredientForm = ({
               type="number"
               step="0.01"
               min="0"
-              value={tempQuantity}
+              value={ingredient.quantity || ''}
               onChange={handleQuantityChange}
-              onBlur={handleQuantityBlur}
-              placeholder="1"
+              placeholder="0"
             />
           </div>
 
@@ -334,31 +364,56 @@ const SupplierIngredientForm = ({
 
           {!isSupplierIngredient && (
             <div>
-              <Label>Costo Unitario (€)</Label>
+              <Label>Cantidad de Referencia</Label>
               <Input
                 type="number"
                 step="0.01"
                 min="0"
-                value={tempUnitCost}
-                onChange={handleUnitCostChange}
-                onBlur={handleUnitCostBlur}
-                placeholder="0"
+                value={ingredient.package_quantity || ''}
+                onChange={handlePackageQuantityChange}
+                placeholder="1000"
               />
             </div>
           )}
         </div>
 
-        {selectedProduct && isSupplierIngredient && ingredient.quantity > 0 && (
-          <Card className="bg-green-50 border-green-200">
+        {!isSupplierIngredient && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Precio del Paquete (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={ingredient.package_price || ''}
+                onChange={handlePackagePriceChange}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label>Costo por Unidad (€)</Label>
+              <Input
+                type="number"
+                step="0.0001"
+                value={ingredient.unit_cost?.toFixed(4) || '0.0000'}
+                readOnly
+                className="bg-gray-100"
+              />
+            </div>
+          </div>
+        )}
+
+        {!isSupplierIngredient && getManualProportionDisplay() && (
+          <Card className="bg-green-100 border-green-200">
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Calculator className="h-4 w-4 text-green-600" />
-                <span className="font-medium text-green-800">Cálculo de Costo (con conversión)</span>
+                <span className="font-medium text-green-800">Cálculo de Costo Manual</span>
               </div>
               
               <div className="text-sm space-y-1 text-green-700">
-                <p><strong>Conversión:</strong> {getConversionDisplay()}</p>
-                <p><strong>Precio base:</strong> €{(ingredient.unit_cost || 0).toFixed(4)}/{ingredient.unit}</p>
+                <p><strong>Proporción usada:</strong> {getManualProportionDisplay()}</p>
+                <p><strong>Costo base:</strong> €{(ingredient.unit_cost || 0).toFixed(4)}/{ingredient.unit}</p>
               </div>
               
               <div className="mt-2 text-lg font-bold text-green-800">
@@ -368,12 +423,24 @@ const SupplierIngredientForm = ({
           </Card>
         )}
 
-        {!isSupplierIngredient && (
-          <div className="text-right">
-            <span className="text-lg font-semibold">
-              Total: €{ingredient.total_cost.toFixed(2)}
-            </span>
-          </div>
+        {selectedProduct && isSupplierIngredient && ingredient.quantity > 0 && (
+          <Card className="bg-blue-100 border-blue-200">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Calculator className="h-4 w-4 text-blue-600" />
+                <span className="font-medium text-blue-800">Cálculo de Costo (con conversión)</span>
+              </div>
+              
+              <div className="text-sm space-y-1 text-blue-700">
+                <p><strong>Conversión:</strong> {getConversionDisplay()}</p>
+                <p><strong>Precio base:</strong> €{(ingredient.unit_cost || 0).toFixed(4)}/{ingredient.unit}</p>
+              </div>
+              
+              <div className="mt-2 text-lg font-bold text-blue-800">
+                Costo Total: €{ingredient.total_cost.toFixed(2)}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </CardContent>
     </Card>

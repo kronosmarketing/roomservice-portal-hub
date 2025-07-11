@@ -21,11 +21,15 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
     try {
       setUploading(true);
       
+      console.log('🖼️ Iniciando carga de imagen...');
+      
       if (!event.target.files || event.target.files.length === 0) {
+        console.log('❌ No se seleccionó archivo');
         return;
       }
 
       const file = event.target.files[0];
+      console.log('📁 Archivo seleccionado:', { name: file.name, size: file.size, type: file.type });
       
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
@@ -51,11 +55,14 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
       const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `recipes/${fileName}`;
 
+      console.log('📤 Subiendo archivo:', filePath);
+
       const { error: uploadError } = await supabase.storage
         .from('recipe-images')
         .upload(filePath, file);
 
       if (uploadError) {
+        console.error('❌ Error al subir:', uploadError);
         throw uploadError;
       }
 
@@ -63,6 +70,9 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
         .from('recipe-images')
         .getPublicUrl(filePath);
 
+      console.log('✅ Imagen subida correctamente:', publicUrl);
+
+      // Call the callback immediately
       onImageUploaded(publicUrl);
       
       toast({
@@ -79,10 +89,15 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
       });
     } finally {
       setUploading(false);
+      // Reset input value to allow uploading the same file again
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
   const handleRemoveImage = () => {
+    console.log('🗑️ Eliminando imagen');
     onImageRemoved();
     toast({
       title: "Éxito",
