@@ -45,6 +45,90 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
     }
   }, [isOpen, hotelId]);
 
+  const sendClosureToWebhook = async (closureInfo: any) => {
+    try {
+      console.log('🖨️ Enviando Cierre Z al webhook:', closureInfo);
+      
+      const { data, error } = await supabase.functions.invoke('print-report', {
+        body: {
+          type: 'closure_z',
+          hotel_id: hotelId,
+          totalPedidos: closureInfo.totalPedidos,
+          pedidosCompletados: closureInfo.pedidosCompletados,
+          pedidosCancelados: closureInfo.pedidosCancelados,
+          pedidosEliminados: closureInfo.pedidosEliminados,
+          totalDinero: closureInfo.totalDinero,
+          metodosDetalle: closureInfo.metodosDetalle
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error enviando al webhook:', error);
+        toast({
+          title: "Advertencia",
+          description: "El cierre se completó pero no se pudo enviar a la impresora",
+          variant: "destructive"
+        });
+      } else {
+        console.log('✅ Cierre Z enviado al webhook exitosamente:', data);
+        toast({
+          title: "Cierre enviado",
+          description: "El informe Z se ha enviado a la impresora automáticamente",
+        });
+      }
+    } catch (webhookError) {
+      console.error('❌ Error crítico en webhook:', webhookError);
+      toast({
+        title: "Advertencia",
+        description: "El cierre se completó pero hubo un error con la impresión automática",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const reprintClosureReport = async () => {
+    if (!closureData) return;
+    
+    try {
+      console.log('🖨️ Reimprimiendo Cierre Z vía webhook');
+      
+      const { data, error } = await supabase.functions.invoke('print-report', {
+        body: {
+          type: 'closure_z', 
+          hotel_id: hotelId,
+          totalPedidos: closureData.totalPedidos,
+          pedidosCompletados: closureData.pedidosCompletados,
+          pedidosCancelados: closureData.pedidosCancelados,
+          pedidosEliminados: closureData.pedidosEliminados,
+          totalDinero: closureData.totalDinero,
+          metodosDetalle: closureData.metodosDetalle
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error reimprimiendo:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo reimprimir el informe",
+          variant: "destructive"
+        });
+      } else {
+        console.log('✅ Reimpresión enviada exitosamente');
+        toast({
+          title: "Reimpresión enviada",
+          description: "El informe se ha enviado nuevamente a la impresora",
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error crítico reimprimiendo:', error);
+      toast({
+        title: "Error",
+        description: "Error crítico al reimprimir",
+        variant: "destructive"
+      });
+    }
+  };
+
   const printClosureReport = (data: any) => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
@@ -186,7 +270,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       console.log('🔄 Iniciando cierre Z del día para hotel:', hotelId);
 
-      // Obtener todos los pedidos completados y cancelados del día
       const { data: finishedOrders, error: ordersError } = await supabase
         .from('orders')
         .select('*')
@@ -199,7 +282,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         throw ordersError;
       }
 
-      // Obtener pedidos eliminados del día desde security_audit_log
       const { data: deletedOrdersLog, error: deletedError } = await supabase
         .from('security_audit_log')
         .select('created_at')
@@ -227,11 +309,9 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       console.log('📋 Pedidos a archivar:', finishedOrders.length);
       console.log('🗑️ Pedidos eliminados del día:', deletedOrdersCount);
 
-      // Separar pedidos completados y cancelados para estadísticas
       const completedOrders = finishedOrders.filter(order => order.status === 'completado');
       const cancelledOrders = finishedOrders.filter(order => order.status === 'cancelado');
 
-      // Calcular totales para el extracto con desglose detallado
       const totalDinero = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
       
       const metodosDetalle = completedOrders.reduce((acc, order) => {
@@ -244,7 +324,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         return acc;
       }, {} as Record<string, { cantidad: number; total: number }>);
 
-      // **NUEVA FUNCIONALIDAD: Guardar en daily_closures**
       try {
         const { error: closureError } = await supabase
           .from('daily_closures')
@@ -271,7 +350,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         console.error('Error de BD al guardar cierre:', dbError);
       }
 
-      // Preparar datos del cierre para mostrar al usuario (formato local)
       const closureInfo = {
         fecha: today.toLocaleDateString('es-ES'),
         hora: new Date().toLocaleString('es-ES'),
@@ -287,9 +365,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       console.log('📄 Datos del Cierre Z preparados:', closureInfo);
 
-      // Archivar todos los pedidos (completados y cancelados)
       const archivePromises = finishedOrders.map(async (order) => {
-        // Obtener items del pedido
         const { data: orderItems } = await supabase
           .from('order_items')
           .select(`
@@ -311,7 +387,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
           return `${item.quantity}x ${itemName}`;
         }).join(', ') || 'Sin items';
 
-        // Insertar en archived_orders
         return supabase
           .from('archived_orders')
           .insert({
@@ -331,7 +406,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
       await Promise.all(archivePromises);
       console.log('✅ Pedidos archivados correctamente');
 
-      // Eliminar pedidos originales
       const { error: deleteError } = await supabase
         .from('orders')
         .delete()
@@ -348,7 +422,8 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       setClosureData(closureInfo);
 
-      // Actualizar estado local
+      await sendClosureToWebhook(closureInfo);
+
       const { data: remainingOrders } = await supabase
         .from('orders')
         .select('*')
@@ -356,7 +431,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         .order('created_at', { ascending: false });
 
       if (remainingOrders) {
-        // Convertir a formato Order con items
         const formattedOrders: Order[] = await Promise.all(
           remainingOrders.map(async (order) => {
             const { data: orderItems } = await supabase
@@ -394,7 +468,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         onOrdersChange(formattedOrders);
       }
 
-      // Resetear estadísticas
       onDayStatsChange({
         totalFinalizados: 0,
         ventasDelDia: 0,
@@ -514,7 +587,7 @@ MarjorAI
                 Descargar
               </Button>
               <Button 
-                onClick={() => printClosureReport(closureData)} 
+                onClick={reprintClosureReport} 
                 variant="outline"
                 className="flex-1"
               >
