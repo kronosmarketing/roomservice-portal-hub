@@ -53,11 +53,8 @@ serve(async (req) => {
       throw new Error(`Error fetching recipe: ${recipeError.message}`);
     }
 
-    // Get webhook URL from secrets
-    const webhookUrl = Deno.env.get('RECIPE_EMAIL_WEBHOOK_URL');
-    if (!webhookUrl) {
-      throw new Error('Webhook URL not configured');
-    }
+    // Use the n8n webhook URL directly
+    const webhookUrl = 'https://n8n-n8n.mdrxie.easypanel.host/webhook/bef5925b-45d4-4f5d-a3ab-eb59afb62659';
 
     // Format recipe data
     const formattedData: RecipeData = {
@@ -72,9 +69,9 @@ serve(async (req) => {
       steps: recipe.recipe_steps || []
     };
 
-    console.log('Sending recipe to webhook:', formattedData.name);
+    console.log('Sending recipe to n8n webhook:', formattedData.name);
 
-    // Send to webhook
+    // Send to n8n webhook
     const webhookResponse = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
@@ -88,17 +85,17 @@ serve(async (req) => {
     });
 
     if (!webhookResponse.ok) {
-      throw new Error(`Webhook failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
+      throw new Error(`N8N Webhook failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
     }
 
     const result = await webhookResponse.json().catch(() => ({}));
 
-    console.log('Recipe sent successfully to webhook');
+    console.log('Recipe sent successfully to n8n webhook');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Recipe sent successfully',
+        message: 'Escandallo enviado correctamente a n8n',
         webhookResponse: result
       }),
       {
