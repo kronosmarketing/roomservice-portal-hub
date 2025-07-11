@@ -39,8 +39,9 @@ export const reprintClosure = async (closureData: ClosureData, hotelId: string) 
     
     const { data, error } = await supabase.functions.invoke('print-report', {
       body: {
-        type: 'closure_z', 
+        report_type: 'reprintClosure',
         hotel_id: hotelId,
+        fecha: closureData.fecha,
         totalPedidos: closureData.totalPedidos,
         pedidosCompletados: closureData.pedidosCompletados,
         pedidosCancelados: closureData.pedidosCancelados,

@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
@@ -57,17 +56,18 @@ serve(async (req) => {
       );
     }
 
-    const { type, hotel_id, order_id, ...otherData } = requestBody;
+    const { type, report_type, hotel_id, order_id, ...otherData } = requestBody;
+    const effectiveType = report_type || type; // Use report_type if available, fallback to type
 
-    console.log('📤 Procesando solicitud:', { type, hotel_id, order_id });
+    console.log('📤 Procesando solicitud:', { type, report_type, effectiveType, hotel_id, order_id });
 
     // Validar campos requeridos
-    if (!type || !hotel_id) {
-      console.error('❌ Campos requeridos faltantes:', { type, hotel_id });
+    if (!effectiveType || !hotel_id) {
+      console.error('❌ Campos requeridos faltantes:', { type: effectiveType, hotel_id });
       return new Response(
         JSON.stringify({ 
-          error: 'Missing required fields: type and hotel_id',
-          received: { type, hotel_id }
+          error: 'Missing required fields: type/report_type and hotel_id',
+          received: { type: effectiveType, hotel_id }
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -104,7 +104,7 @@ serve(async (req) => {
     const fechaFormateada = currentTime.toLocaleDateString('es-ES');
     const horaFormateada = currentTime.toLocaleString('es-ES');
 
-    switch (type) {
+    switch (effectiveType) {
       case 'order_print':
         const orderData = requestBody.data || {};
         webhookPayload = {
@@ -162,12 +162,30 @@ serve(async (req) => {
         };
         break;
 
+      case 'reprintClosure':
+        webhookPayload = {
+          hotel_id,
+          report_type: 'reprintClosure',
+          report_data: {
+            fecha: requestBody.fecha || fechaFormateada, // Use specific date if provided
+            hora: horaFormateada,
+            hotel_name: hotelName,
+            totalPedidos: parseInt(requestBody.totalPedidos || '0'),
+            pedidosCompletados: parseInt(requestBody.pedidosCompletados || '0'),
+            pedidosCancelados: parseInt(requestBody.pedidosCancelados || '0'),
+            pedidosEliminados: parseInt(requestBody.pedidosEliminados || '0'),
+            totalDinero: parseFloat(requestBody.totalDinero || '0'),
+            metodosDetalle: requestBody.metodosDetalle || {}
+          }
+        };
+        break;
+
       default:
-        console.error('❌ Tipo de reporte no soportado:', type);
+        console.error('❌ Tipo de reporte no soportado:', effectiveType);
         return new Response(
           JSON.stringify({ 
-            error: `Tipo de reporte no soportado: ${type}`,
-            supported_types: ['order_print', 'daily_report_x', 'closure_z']
+            error: `Tipo de reporte no soportado: ${effectiveType}`,
+            supported_types: ['order_print', 'daily_report_x', 'closure_z', 'reprintClosure']
           }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
