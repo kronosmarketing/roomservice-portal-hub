@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,8 +99,11 @@ const ClosuresManagement = ({ hotelId }: ClosuresManagementProps) => {
       // Convert DailyClosure to ClosureData format
       const paymentDetails = closure.payment_methods_detail as Record<string, { cantidad: number; total: number }> || {};
       
+      // Parse the closure date properly to avoid timezone issues
+      const closureDate = new Date(closure.closure_date + 'T12:00:00');
+      
       const closureData = {
-        fecha: format(new Date(closure.closure_date), 'dd/MM/yyyy', { locale: es }),
+        fecha: format(closureDate, 'dd/MM/yyyy', { locale: es }),
         hora: new Date().toLocaleString('es-ES'),
         hotel_name: hotelName,
         totalPedidos: closure.total_orders,
