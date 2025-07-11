@@ -434,147 +434,73 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
   const handlePrintOrder = async (order: Order) => {
     try {
-      // Send to webhook first
+      console.log('🖨️ Enviando pedido al webhook:', order.id.substring(0, 8));
+
+      // Formatear los items correctamente
+      let formattedItems = order.items;
+      
+      // Si los items vienen como JSON, parsearlos y formatearlos
       try {
-        const { error: webhookError } = await supabase.functions.invoke('print-report', {
-          body: {
-            type: 'order_print',
-            hotel_id: hotelId,
-            order_id: order.id,
-            data: {
-              room_number: order.roomNumber,
-              items: order.items,
-              total: order.total,
-              status: order.status,
-              payment_method: order.paymentMethod,
-              special_instructions: order.specialInstructions,
-              timestamp: order.timestamp
-            }
-          }
-        });
-
-        if (webhookError) {
-          console.error('Error enviando al webhook:', webhookError);
-        } else {
-          console.log('✅ Pedido enviado al webhook correctamente');
+        if (typeof order.items === 'string' && order.items.startsWith('[')) {
+          const itemsArray = JSON.parse(order.items);
+          formattedItems = itemsArray
+            .map((item: any) => {
+              if (item.quantity && item.name) {
+                return `${item.quantity}x ${item.name}`;
+              } else if (item.quantity && item.menu_item?.name) {
+                return `${item.quantity}x ${item.menu_item.name}`;
+              }
+              return item.toString();
+            })
+            .join(', ');
         }
-      } catch (webhookError) {
-        console.error('Error webhook:', webhookError);
-        // Continue with local printing even if webhook fails
+      } catch (parseError) {
+        console.log('Items no requieren parsing:', parseError);
+        // Mantener el formato original si no se puede parsear
       }
 
-      // Continue with local printing
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const currentTime = new Date().toLocaleString('es-ES');
-        
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Ticket - Pedido #${order.id.substring(0, 8)}</title>
-              <style>
-                @media print {
-                  @page { 
-                    size: 80mm auto; 
-                    margin: 0; 
-                  }
-                }
-                body { 
-                  font-family: 'Courier New', monospace; 
-                  font-size: 12px;
-                  margin: 0;
-                  padding: 10px;
-                  width: 80mm;
-                  line-height: 1.2;
-                }
-                .center { text-align: center; }
-                .bold { font-weight: bold; }
-                .separator { 
-                  border-top: 1px dashed #000; 
-                  margin: 10px 0; 
-                }
-                .row {
-                  display: flex;
-                  justify-content: space-between;
-                  margin: 2px 0;
-                }
-                .total-section {
-                  margin-top: 15px;
-                  padding-top: 10px;
-                  border-top: 2px solid #000;
-                }
-                .footer {
-                  margin-top: 15px;
-                  text-align: center;
-                  font-size: 10px;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="center bold">
-                ${hotelName.toUpperCase()}
-              </div>
-              <div class="center bold">
-                === PEDIDO #${order.id.substring(0, 8)} ===
-              </div>
-              <div class="center">
-                Habitación: ${sanitizeInput(order.roomNumber)}
-              </div>
-              <div class="center">
-                ${order.timestamp}
-              </div>
-              
-              <div class="separator"></div>
-              
-              <div class="bold">PRODUCTOS:</div>
-              <div>${sanitizeInput(order.items)}</div>
-              
-              ${order.specialInstructions ? `
-              <div class="separator"></div>
-              <div class="bold">INSTRUCCIONES:</div>
-              <div>${sanitizeInput(order.specialInstructions)}</div>
-              ` : ''}
-              
-              <div class="separator"></div>
-              
-              <div class="row">
-                <span>Estado:</span>
-                <span class="bold">${order.status.toUpperCase()}</span>
-              </div>
-              <div class="row">
-                <span>Pago:</span>
-                <span>${sanitizeInput(order.paymentMethod || 'habitacion')}</span>
-              </div>
-              
-              <div class="total-section">
-                <div class="row bold">
-                  <span>TOTAL:</span>
-                  <span>${formatPrice(order.total)}</span>
-                </div>
-              </div>
-              
-              <div class="separator"></div>
-              
-              <div class="footer">
-                Impreso: ${currentTime}
-                <br><br>
-                <strong>MarjorAI</strong>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 250);
+      console.log('📝 Items formateados:', formattedItems);
+
+      // Enviar al webhook únicamente
+      const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
+        body: {
+          type: 'order_print',
+          hotel_id: hotelId,
+          order_id: order.id,
+          data: {
+            room_number: order.roomNumber,
+            items: formattedItems,
+            total: order.total,
+            status: order.status,
+            payment_method: order.paymentMethod,
+            special_instructions: order.specialInstructions,
+            timestamp: order.timestamp
+          }
+        }
+      });
+
+      if (webhookError) {
+        console.error('❌ Error enviando al webhook:', webhookError);
+        toast({
+          title: "Error",
+          description: `No se pudo enviar el pedido al webhook: ${webhookError.message}`,
+          variant: "destructive"
+        });
+        return;
       }
+
+      console.log('✅ Pedido enviado al webhook correctamente:', response);
+      
+      toast({
+        title: "Pedido enviado",
+        description: `Pedido #${order.id.substring(0, 8)} enviado al sistema de impresión correctamente`,
+      });
+
     } catch (error) {
-      console.error('Error imprimiendo pedido:', error);
+      console.error('❌ Error procesando pedido:', error);
       toast({
         title: "Error",
-        description: "No se pudo imprimir el pedido",
+        description: "No se pudo procesar el pedido",
         variant: "destructive"
       });
     }
@@ -605,7 +531,7 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const completedOrders = todayOrders.filter(o => o.status === 'completado');
         const cancelledOrders = todayOrders.filter(o => o.status === 'cancelado');
         
-        // Calcular totales por método de pago - NOMBRE CORREGIDO
+        // Calcular totales por método de pago
         const metodosDetalle = completedOrders.reduce((acc, order) => {
           const method = order.payment_method || 'habitacion';
           if (!acc[method]) {
@@ -618,7 +544,6 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
         const totalMoney = completedOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Estructura de datos corregida - nombres de campos unificados
         const reportPayload = {
           type: 'daily_report_x',
           hotel_id: hotelId,
@@ -626,12 +551,11 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           pedidos_completados: completedOrders.length,
           pedidos_cancelados: cancelledOrders.length,
           total_dinero: totalMoney,
-          metodos_detalle: metodosDetalle  // NOMBRE CORREGIDO
+          metodosDetalle: metodosDetalle
         };
 
         console.log('📊 Payload del Informe X preparado:', JSON.stringify(reportPayload, null, 2));
 
-        // Enviar al webhook con la estructura corregida
         const { data: response, error: webhookError } = await supabase.functions.invoke('print-report', {
           body: reportPayload
         });
