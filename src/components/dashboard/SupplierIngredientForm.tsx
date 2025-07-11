@@ -351,41 +351,35 @@ const SupplierIngredientForm = ({
           {!isSupplierIngredient && (
             <div>
               <Label>Cantidad de Referencia</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={ingredient.package_quantity || ''}
-                onChange={handlePackageQuantityChange}
-                placeholder="1000"
-              />
+              <div className="flex">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={ingredient.package_quantity || ''}
+                  onChange={handlePackageQuantityChange}
+                  placeholder="1000"
+                  className="rounded-r-none"
+                />
+                <div className="bg-gray-100 border border-l-0 border-gray-300 rounded-r-md px-3 py-2 text-sm text-gray-600 min-w-[60px] flex items-center justify-center">
+                  {ingredient.unit}
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {!isSupplierIngredient && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Precio del Paquete (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={ingredient.package_price || ''}
-                onChange={handlePackagePriceChange}
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <Label>Costo por Unidad (€)</Label>
-              <Input
-                type="number"
-                step="0.0001"
-                value={ingredient.unit_cost?.toFixed(4) || '0.0000'}
-                readOnly
-                className="bg-gray-100"
-              />
-            </div>
+          <div>
+            <Label>Precio del Paquete (€)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={ingredient.package_price || ''}
+              onChange={handlePackagePriceChange}
+              placeholder="0"
+            />
           </div>
         )}
 
