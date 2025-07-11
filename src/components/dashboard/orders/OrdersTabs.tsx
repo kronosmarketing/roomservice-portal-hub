@@ -1,28 +1,18 @@
+
 import { useState, useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { Clock, CheckCircle, AlertCircle, Trash2, FileText, Printer, X, Eye, Hash, Copy, ChevronDown, Search } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Clock, CheckCircle, AlertCircle, X, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order, DayStats } from "./types";
-import { formatPrice, formatTime, getStatusColor, getStatusIcon } from "./orderUtils";
-import { validateUserHotelAccess, sanitizeInput, validateOrderId } from "./securityUtils";
+import { validateUserHotelAccess, validateOrderId } from "./securityUtils";
 import OrderReportsDialog from "./OrderReportsDialog";
 import DeleteOrderDialog from "./DeleteOrderDialog";
 import DayClosure from "./DayClosure";
 import SearchOrders from "../SearchOrders";
-import MobileActionsMenu from "../mobile/MobileActionsMenu";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import OrdersActionsMenu from "./OrdersActionsMenu";
+import OrdersTabsContent from "./OrdersTabsContent";
 
 interface OrdersTabsProps {
   orders: Order[];
@@ -30,230 +20,6 @@ interface OrdersTabsProps {
   onDayStatsChange: (stats: DayStats) => void;
   hotelId: string;
 }
-
-const OrderStatusButton = ({ order, onStatusChange }: { order: Order; onStatusChange: (orderId: string, status: string) => void }) => {
-  const nextStatus = {
-    'pendiente': 'preparando',
-    'preparando': 'completado',
-    'completado': 'completado'
-  };
-
-  const statusLabels = {
-    'pendiente': 'Preparando',
-    'preparando': 'Completado',
-    'completado': 'Completado'
-  };
-
-  const statusColors = {
-    'pendiente': 'bg-yellow-500 hover:bg-yellow-600',
-    'preparando': 'bg-blue-500 hover:bg-blue-600',
-    'completado': 'bg-green-500'
-  };
-
-  if (order.status === 'completado') {
-    return (
-      <Button size="sm" className={statusColors[order.status]} disabled>
-        <CheckCircle className="h-4 w-4 mr-1" />
-        Completado
-      </Button>
-    );
-  }
-
-  return (
-    <Button
-      size="sm"
-      className={`${statusColors[order.status]} text-white`}
-      onClick={() => onStatusChange(order.id, nextStatus[order.status as keyof typeof nextStatus])}
-    >
-      {order.status === 'pendiente' ? (
-        <Clock className="h-4 w-4 mr-1" />
-      ) : (
-        <AlertCircle className="h-4 w-4 mr-1" />
-      )}
-      {statusLabels[order.status as keyof typeof statusLabels]}
-    </Button>
-  );
-};
-
-const getStatusBadgeColor = (status: string) => {
-  switch (status) {
-    case 'pendiente':
-      return 'bg-yellow-500 text-white border-yellow-500';
-    case 'preparando':
-      return 'bg-blue-500 text-white border-blue-500';
-    case 'completado':
-      return 'bg-green-500 text-white border-green-500';
-    case 'cancelado':
-      return 'bg-red-500 text-white border-red-500';
-    default:
-      return 'bg-gray-500 text-white border-gray-500';
-  }
-};
-
-const formatItemsForDisplay = (items: string) => {
-  try {
-    // First try to parse as JSON array
-    if (typeof items === 'string' && items.startsWith('[')) {
-      const itemsArray = JSON.parse(items);
-      return itemsArray.map((item: any, index: number) => (
-        <div key={index} className="text-sm">
-          {item.quantity && item.name 
-            ? sanitizeInput(`${item.quantity}x ${item.name}`)
-            : item.quantity && item.menu_item?.name
-            ? sanitizeInput(`${item.quantity}x ${item.menu_item.name}`)
-            : sanitizeInput(item.toString())
-          }
-        </div>
-      ));
-    }
-    
-    // If it's already a formatted string, split by commas or newlines
-    const itemsList = items.includes('\n') ? items.split('\n') : items.split(', ');
-    return itemsList.map((item: string, index: number) => (
-      <div key={index} className="text-sm">
-        {sanitizeInput(item.trim())}
-      </div>
-    ));
-  } catch (error) {
-    // Fallback to display as single item
-    return <div className="text-sm">{sanitizeInput(items)}</div>;
-  }
-};
-
-const OrderCard = ({ 
-  order, 
-  onStatusChange, 
-  onCancelOrder, 
-  onPrintOrder,
-  showAllActions = false 
-}: { 
-  order: Order; 
-  onStatusChange: (orderId: string, status: string) => void;
-  onCancelOrder: (orderId: string) => void;
-  onPrintOrder: (order: Order) => void;
-  showAllActions?: boolean;
-}) => {
-  const { toast } = useToast();
-  const isMobile = useIsMobile();
-
-  const copyOrderId = async (orderId: string) => {
-    try {
-      await navigator.clipboard.writeText(orderId);
-      toast({
-        title: "ID copiado",
-        description: `ID del pedido copiado al portapapeles`,
-      });
-    } catch (error) {
-      console.error('Error copiando ID:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo copiar el ID",
-        variant: "destructive"
-      });
-    }
-  };
-
-  return (
-    <Card className="mb-4">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} mb-1`}>
-              Habitación {sanitizeInput(order.roomNumber)}
-            </CardTitle>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1">
-                <Hash className="h-3 w-3 text-gray-500 flex-shrink-0" />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-1 cursor-pointer group">
-                        <span className="font-mono text-xs truncate">
-                          #{order.id.substring(0, 8)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                          onClick={() => copyOrderId(order.id)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Hacer clic para copiar ID completo</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div className="text-xs text-gray-500">
-                {formatTime(order.timestamp)}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-3">
-            <Badge className={`${getStatusBadgeColor(order.status)} text-xs whitespace-nowrap`}>
-              {getStatusIcon(order.status)}
-              {isMobile ? order.status.charAt(0).toUpperCase() : order.status}
-            </Badge>
-            <span className={`${isMobile ? 'text-sm' : 'text-lg'} font-bold text-green-600 whitespace-nowrap`}>
-              {formatPrice(order.total)}
-            </span>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3 mb-4">
-          <div>
-            <span className={`font-medium ${isMobile ? 'text-sm' : ''} block`}>
-              {formatItemsForDisplay(order.items)}
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            Pago: {sanitizeInput(order.paymentMethod || 'habitacion')}
-          </div>
-        </div>
-        
-        {order.specialInstructions && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-sm">
-              <strong>Instrucciones especiales:</strong> {sanitizeInput(order.specialInstructions)}
-            </p>
-          </div>
-        )}
-        
-        <div className={`flex ${isMobile ? 'flex-row gap-2 items-center justify-start' : 'justify-between items-center'}`}>
-          <div className={`flex gap-2 ${isMobile ? 'flex-row items-center' : ''}`}>
-            {(showAllActions || order.status !== 'completado') && (
-              <OrderStatusButton order={order} onStatusChange={onStatusChange} />
-            )}
-            <Button
-              size="sm"
-              variant="outline" 
-              onClick={() => onPrintOrder(order)}
-              className="flex items-center gap-1 p-2 flex-shrink-0"
-            >
-              <Printer className="h-4 w-4" />
-              {!isMobile && "Imprimir"}
-            </Button>
-            {order.status !== 'completado' && order.status !== 'cancelado' && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => onCancelOrder(order.id)}
-                className="flex items-center gap-1 p-2 flex-shrink-0"
-              >
-                <X className="h-4 w-4" />
-                {!isMobile && "Cancelar"}
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: OrdersTabsProps) => {
   const [showReports, setShowReports] = useState(false);
@@ -682,53 +448,6 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     }
   };
 
-  const DesktopActionsMenu = () => (
-    <div className="flex gap-3 flex-wrap">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Acciones
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 bg-white z-50">
-          <DropdownMenuItem onClick={() => setShowReports(true)} className="cursor-pointer">
-            <FileText className="h-4 w-4 mr-2" />
-            Ver Informes
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handlePrintDailyReport} className="cursor-pointer">
-            <Printer className="h-4 w-4 mr-2" />
-            Informe X (Parcial)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowDayClosure(true)} className="cursor-pointer">
-            <span className="h-4 w-4 mr-2 flex items-center justify-center font-bold text-purple-600">Z</span>
-            Cierre Z (Final)
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      
-      <Button 
-        onClick={() => setShowSearch(true)}
-        variant="outline"
-        className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-300"
-      >
-        <Search className="h-4 w-4" />
-        Buscar Pedidos
-      </Button>
-      
-      <Button 
-        onClick={() => setShowDeleteDialog(true)}
-        variant="destructive"
-        className="flex items-center gap-2"
-      >
-        <Trash2 className="h-4 w-4" />
-        Eliminar Pedido
-      </Button>
-    </div>
-  );
-
   if (showSearch) {
     return (
       <SearchOrders 
@@ -740,19 +459,13 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-3 flex-wrap">
-        {isMobile ? (
-          <MobileActionsMenu 
-            onShowReports={() => setShowReports(true)}
-            onPrintDailyReport={handlePrintDailyReport}
-            onShowDayClosure={() => setShowDayClosure(true)}
-            onShowSearch={() => setShowSearch(true)}
-            onShowDeleteDialog={() => setShowDeleteDialog(true)}
-          />
-        ) : (
-          <DesktopActionsMenu />
-        )}
-      </div>
+      <OrdersActionsMenu
+        onShowReports={() => setShowReports(true)}
+        onPrintDailyReport={handlePrintDailyReport}
+        onShowDayClosure={() => setShowDayClosure(true)}
+        onShowSearch={() => setShowSearch(true)}
+        onShowDeleteDialog={() => setShowDeleteDialog(true)}
+      />
 
       <Tabs defaultValue="all" className="w-full">
         <TabsList className={`${isMobile ? 'grid w-full grid-cols-5 overflow-x-auto scrollbar-hide' : 'grid w-full grid-cols-5'}`}>
@@ -793,86 +506,51 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6">
-          {orders.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay pedidos</p>
-          ) : (
-            orders.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={order} 
-                onStatusChange={handleStatusChange}
-                onCancelOrder={handleCancelOrder}
-                onPrintOrder={handlePrintOrder}
-                showAllActions={true}
-              />
-            ))
-          )}
-        </TabsContent>
+        <OrdersTabsContent
+          orders={orders}
+          onStatusChange={handleStatusChange}
+          onCancelOrder={handleCancelOrder}
+          onPrintOrder={handlePrintOrder}
+          showAllActions={true}
+          tabValue="all"
+          emptyMessage="No hay pedidos"
+        />
 
-        <TabsContent value="pending" className="mt-6">
-          {pendingOrders.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay pedidos pendientes</p>
-          ) : (
-            pendingOrders.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={order} 
-                onStatusChange={handleStatusChange}
-                onCancelOrder={handleCancelOrder}
-                onPrintOrder={handlePrintOrder}
-              />
-            ))
-          )}
-        </TabsContent>
+        <OrdersTabsContent
+          orders={pendingOrders}
+          onStatusChange={handleStatusChange}
+          onCancelOrder={handleCancelOrder}
+          onPrintOrder={handlePrintOrder}
+          tabValue="pending"
+          emptyMessage="No hay pedidos pendientes"
+        />
 
-        <TabsContent value="preparing" className="mt-6">
-          {preparingOrders.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay pedidos en preparación</p>
-          ) : (
-            preparingOrders.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={order} 
-                onStatusChange={handleStatusChange}
-                onCancelOrder={handleCancelOrder}
-                onPrintOrder={handlePrintOrder}
-              />
-            ))
-          )}
-        </TabsContent>
+        <OrdersTabsContent
+          orders={preparingOrders}
+          onStatusChange={handleStatusChange}
+          onCancelOrder={handleCancelOrder}
+          onPrintOrder={handlePrintOrder}
+          tabValue="preparing"
+          emptyMessage="No hay pedidos en preparación"
+        />
 
-        <TabsContent value="completed" className="mt-6">
-          {completedOrders.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay pedidos completados hoy</p>
-          ) : (
-            completedOrders.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={order} 
-                onStatusChange={handleStatusChange}
-                onCancelOrder={handleCancelOrder}
-                onPrintOrder={handlePrintOrder}
-              />
-            ))
-          )}
-        </TabsContent>
+        <OrdersTabsContent
+          orders={completedOrders}
+          onStatusChange={handleStatusChange}
+          onCancelOrder={handleCancelOrder}
+          onPrintOrder={handlePrintOrder}
+          tabValue="completed"
+          emptyMessage="No hay pedidos completados hoy"
+        />
 
-        <TabsContent value="cancelled" className="mt-6">
-          {cancelledOrders.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay pedidos cancelados hoy</p>
-          ) : (
-            cancelledOrders.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={order} 
-                onStatusChange={handleStatusChange}
-                onCancelOrder={handleCancelOrder}
-                onPrintOrder={handlePrintOrder}
-              />
-            ))
-          )}
-        </TabsContent>
+        <OrdersTabsContent
+          orders={cancelledOrders}
+          onStatusChange={handleStatusChange}
+          onCancelOrder={handleCancelOrder}
+          onPrintOrder={handlePrintOrder}
+          tabValue="cancelled"
+          emptyMessage="No hay pedidos cancelados hoy"
+        />
       </Tabs>
 
       <OrderReportsDialog 
