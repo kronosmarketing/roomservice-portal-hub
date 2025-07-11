@@ -66,7 +66,7 @@ const SupplierIngredientForm = ({
   onRemove 
 }: SupplierIngredientFormProps) => {
   const selectedProduct = supplierProducts.find(p => p.id === ingredient.supplier_product_id);
-  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined);
+  const isSupplierIngredient = Boolean(ingredient.supplier_product_id !== undefined && ingredient.supplier_product_id !== null && ingredient.supplier_product_id !== "");
 
   const handleSupplierProductChange = (productId: string) => {
     const product = supplierProducts.find(p => p.id === productId);
@@ -80,7 +80,7 @@ const SupplierIngredientForm = ({
 
   const calculateCost = (quantity: number, unit: string, product?: SupplierProduct) => {
     const currentProduct = product || selectedProduct;
-    if (!currentProduct || !quantity) {
+    if (!currentProduct || !quantity || quantity <= 0) {
       onUpdate(index, 'unit_cost', 0);
       onUpdate(index, 'total_cost', 0);
       return;
@@ -114,14 +114,42 @@ const SupplierIngredientForm = ({
     onUpdate(index, 'total_cost', totalCost);
   };
 
-  const handleQuantityChange = (quantity: number) => {
-    onUpdate(index, 'quantity', quantity);
-    calculateCost(quantity, ingredient.unit);
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const quantity = value === '' ? 0 : parseFloat(value);
+    
+    if (!isNaN(quantity) && quantity >= 0) {
+      onUpdate(index, 'quantity', quantity);
+      if (isSupplierIngredient) {
+        calculateCost(quantity, ingredient.unit);
+      } else {
+        // For manual ingredients, recalculate total cost
+        const totalCost = quantity * ingredient.unit_cost;
+        onUpdate(index, 'total_cost', totalCost);
+      }
+    }
   };
 
   const handleUnitChange = (unit: string) => {
     onUpdate(index, 'unit', unit);
-    calculateCost(ingredient.quantity, unit);
+    if (isSupplierIngredient) {
+      calculateCost(ingredient.quantity, unit);
+    } else {
+      // For manual ingredients, just recalculate total cost
+      const totalCost = ingredient.quantity * ingredient.unit_cost;
+      onUpdate(index, 'total_cost', totalCost);
+    }
+  };
+
+  const handleUnitCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const unitCost = value === '' ? 0 : parseFloat(value);
+    
+    if (!isNaN(unitCost) && unitCost >= 0) {
+      onUpdate(index, 'unit_cost', unitCost);
+      const totalCost = ingredient.quantity * unitCost;
+      onUpdate(index, 'total_cost', totalCost);
+    }
   };
 
   const getConversionDisplay = () => {
@@ -164,7 +192,10 @@ const SupplierIngredientForm = ({
           {isSupplierIngredient ? (
             <div className="md:col-span-2">
               <Label>Producto de Proveedor</Label>
-              <Select value={ingredient.supplier_product_id || ''} onValueChange={handleSupplierProductChange}>
+              <Select 
+                value={ingredient.supplier_product_id || ''} 
+                onValueChange={handleSupplierProductChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar producto" />
                 </SelectTrigger>
@@ -217,8 +248,9 @@ const SupplierIngredientForm = ({
               type="number"
               step="0.01"
               min="0"
-              value={ingredient.quantity}
-              onChange={(e) => handleQuantityChange(parseFloat(e.target.value) || 0)}
+              value={ingredient.quantity || ''}
+              onChange={handleQuantityChange}
+              placeholder="0"
             />
           </div>
 
@@ -245,8 +277,9 @@ const SupplierIngredientForm = ({
                 type="number"
                 step="0.01"
                 min="0"
-                value={ingredient.unit_cost}
-                onChange={(e) => onUpdate(index, 'unit_cost', parseFloat(e.target.value) || 0)}
+                value={ingredient.unit_cost || ''}
+                onChange={handleUnitCostChange}
+                placeholder="0"
               />
             </div>
           )}

@@ -429,6 +429,25 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
     }
   };
 
+  const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
+    const updatedIngredients = [...formData.ingredients];
+    updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
+    
+    // Handle numeric fields properly
+    if (field === 'quantity' || field === 'unit_cost') {
+      const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      updatedIngredients[index][field] = numValue;
+      
+      // Only auto-calculate total cost for manual ingredients
+      if (!updatedIngredients[index].supplier_product_id) {
+        updatedIngredients[index].total_cost = 
+          updatedIngredients[index].quantity * updatedIngredients[index].unit_cost;
+      }
+    }
+    
+    setFormData(prev => ({ ...prev, ingredients: updatedIngredients }));
+  };
+
   const addIngredient = (type: 'manual' | 'supplier' = 'manual') => {
     const newIngredient: RecipeIngredient = {
       id: `temp-${Date.now()}`,
@@ -443,18 +462,6 @@ const EscandallosManagement = ({ hotelId }: EscandallosManagementProps) => {
       ...prev,
       ingredients: [...prev.ingredients, newIngredient]
     }));
-  };
-
-  const updateIngredient = (index: number, field: keyof RecipeIngredient, value: any) => {
-    const updatedIngredients = [...formData.ingredients];
-    updatedIngredients[index] = { ...updatedIngredients[index], [field]: value };
-    
-    if (field === 'quantity' || field === 'unit_cost') {
-      updatedIngredients[index].total_cost = 
-        updatedIngredients[index].quantity * updatedIngredients[index].unit_cost;
-    }
-    
-    setFormData(prev => ({ ...prev, ingredients: updatedIngredients }));
   };
 
   const removeIngredient = (index: number) => {
