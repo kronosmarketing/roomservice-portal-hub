@@ -432,8 +432,38 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
     }
   };
 
-  const handlePrintOrder = (order: Order) => {
+  const handlePrintOrder = async (order: Order) => {
     try {
+      // Send to webhook first
+      try {
+        const { error: webhookError } = await supabase.functions.invoke('print-report', {
+          body: {
+            type: 'order_print',
+            hotel_id: hotelId,
+            order_id: order.id,
+            data: {
+              room_number: order.roomNumber,
+              items: order.items,
+              total: order.total,
+              status: order.status,
+              payment_method: order.paymentMethod,
+              special_instructions: order.specialInstructions,
+              timestamp: order.timestamp
+            }
+          }
+        });
+
+        if (webhookError) {
+          console.error('Error enviando al webhook:', webhookError);
+        } else {
+          console.log('✅ Pedido enviado al webhook correctamente');
+        }
+      } catch (webhookError) {
+        console.error('Error webhook:', webhookError);
+        // Continue with local printing even if webhook fails
+      }
+
+      // Continue with local printing
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         const currentTime = new Date().toLocaleString('es-ES');
@@ -582,135 +612,40 @@ const OrdersTabs = ({ orders, onOrdersChange, onDayStatsChange, hotelId }: Order
         const totalEfectivo = efectivoOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
         const totalTarjeta = tarjetaOrders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
 
-        // Imprimir informe X (sin cerrar)
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          const currentTime = new Date().toLocaleString('es-ES');
-          
-          printWindow.document.write(`
-            <html>
-              <head>
-                <title>Informe X - ${today.toLocaleDateString('es-ES')}</title>
-                <style>
-                  @media print {
-                    @page { 
-                      size: 80mm auto; 
-                      margin: 0; 
-                    }
-                  }
-                  body { 
-                    font-family: 'Courier New', monospace; 
-                    font-size: 12px;
-                    margin: 0;
-                    padding: 10px;
-                    width: 80mm;
-                    line-height: 1.2;
-                  }
-                  .center { text-align: center; }
-                  .bold { font-weight: bold; }
-                  .separator { 
-                    border-top: 1px dashed #000; 
-                    margin: 10px 0; 
-                  }
-                  .double-separator { 
-                    border-top: 2px solid #000; 
-                    margin: 10px 0; 
-                  }
-                  .row {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 2px 0;
-                  }
-                  .total-section {
-                    margin-top: 15px;
-                    padding-top: 10px;
-                    border-top: 2px solid #000;
-                  }
-                  .footer {
-                    margin-top: 15px;
-                    text-align: center;
-                    font-size: 10px;
-                  }
-                </style>
-              </head>
-              <body>
-                <div class="center bold">
-                  ${hotelName.toUpperCase()}
-                </div>
-                <div class="center bold">
-                  === INFORME X ===
-                </div>
-                <div class="center">
-                  ${today.toLocaleDateString('es-ES')} - ${currentTime}
-                </div>
-                <div class="center">
-                  INFORME PARCIAL DEL DIA
-                </div>
-                
-                <div class="separator"></div>
-                
-                <div class="bold">RESUMEN DE PEDIDOS:</div>
-                <div class="row">
-                  <span>Total pedidos:</span>
-                  <span class="bold">${todayOrders.length}</span>
-                </div>
-                <div class="row">
-                  <span>Completados:</span>
-                  <span class="bold">${completedOrders.length}</span>
-                </div>
-                <div class="row">
-                  <span>Cancelados:</span>
-                  <span>${cancelledOrders.length}</span>
-                </div>
-                
-                <div class="separator"></div>
-                
-                <div class="bold">METODOS DE PAGO:</div>
-                <div class="row">
-                  <span>Habitacion:</span>
-                  <span>${habitacionOrders.length} (€${totalHabitacion.toFixed(2)})</span>
-                </div>
-                <div class="row">
-                  <span>Efectivo:</span>
-                  <span>${efectivoOrders.length} (€${totalEfectivo.toFixed(2)})</span>
-                </div>
-                <div class="row">
-                  <span>Tarjeta:</span>
-                  <span>${tarjetaOrders.length} (€${totalTarjeta.toFixed(2)})</span>
-                </div>
-                
-                <div class="total-section">
-                  <div class="row bold">
-                    <span>TOTAL PARCIAL:</span>
-                    <span>€${totalMoney.toFixed(2)}</span>
-                  </div>
-                </div>
-                
-                <div class="separator"></div>
-                
-                <div class="center">
-                  INFORME PARCIAL - NO CIERRE
-                </div>
-                <div class="footer">
-                  Generado: ${currentTime}
-                  <br><br>
-                  <strong>MarjorAI</strong>
-                </div>
-              </body>
-            </html>
-          `);
-          printWindow.document.close();
-          
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 250);
+        // Send to webhook (no print dialog)
+        try {
+          const { error: webhookError } = await supabase.functions.invoke('print-report', {
+            body: {
+              type: 'daily_report_x',
+              hotel_id: hotelId,
+              data: {
+                fecha: today.toLocaleDateString('es-ES'),
+                total_pedidos: todayOrders.length,
+                pedidos_completados: completedOrders.length,
+                pedidos_cancelados: cancelledOrders.length,
+                metodos_pago: {
+                  habitacion: { cantidad: habitacionOrders.length, total: totalHabitacion },
+                  efectivo: { cantidad: efectivoOrders.length, total: totalEfectivo },
+                  tarjeta: { cantidad: tarjetaOrders.length, total: totalTarjeta }
+                },
+                total_dinero: totalMoney
+              }
+            }
+          });
+
+          if (webhookError) {
+            console.error('Error enviando informe X al webhook:', webhookError);
+          } else {
+            console.log('✅ Informe X enviado al webhook correctamente');
+          }
+        } catch (webhookError) {
+          console.error('Error webhook informe X:', webhookError);
         }
       }
 
       toast({
-        title: "Informe X generado",
-        description: "Informe parcial del día impreso correctamente",
+        title: "Informe X enviado",
+        description: "Informe parcial del día enviado al sistema de impresión",
       });
 
     } catch (error) {

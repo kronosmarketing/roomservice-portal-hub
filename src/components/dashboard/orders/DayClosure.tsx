@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -240,6 +239,25 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
         timestamp: new Date().toLocaleString('es-ES')
       };
 
+      // Send to webhook BEFORE archiving (no print dialog)
+      try {
+        const { error: webhookError } = await supabase.functions.invoke('print-report', {
+          body: {
+            type: 'closure_z',
+            hotel_id: hotelId,
+            data: closureInfo
+          }
+        });
+
+        if (webhookError) {
+          console.error('Error enviando cierre Z al webhook:', webhookError);
+        } else {
+          console.log('✅ Cierre Z enviado al webhook correctamente');
+        }
+      } catch (webhookError) {
+        console.error('Error webhook cierre Z:', webhookError);
+      }
+
       // Archivar todos los pedidos (completados y cancelados)
       const archivePromises = finishedOrders.map(async (order) => {
         // Obtener items del pedido
@@ -299,9 +317,6 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       console.log('🗑️ Pedidos originales eliminados');
 
-      // Imprimir automáticamente el informe Z
-      printClosureReport(closureInfo);
-
       setClosureData(closureInfo);
 
       // Actualizar estado local
@@ -360,7 +375,7 @@ const DayClosure = ({ isOpen, onClose, hotelId, onOrdersChange, onDayStatsChange
 
       toast({
         title: "Cierre Z completado",
-        description: `Se han archivado ${finishedOrders.length} pedidos y generado el informe final`,
+        description: `Se han archivado ${finishedOrders.length} pedidos y enviado al sistema de impresión`,
       });
 
     } catch (error) {
