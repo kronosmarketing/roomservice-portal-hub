@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,18 @@ interface ImageUploadProps {
 const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: ImageUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleButtonClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    console.log('🖱️ Botón clickeado, abriendo selector de archivos...');
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -136,6 +148,7 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
 
       <div className="flex items-center gap-2">
         <Input
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           onChange={handleFileUpload}
@@ -143,17 +156,16 @@ const ImageUpload = ({ currentImageUrl, onImageUploaded, onImageRemoved }: Image
           className="hidden"
           id="image-upload"
         />
-        <Label htmlFor="image-upload" asChild>
-          <Button 
-            type="button" 
-            variant="outline" 
-            disabled={uploading}
-            className="cursor-pointer"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            {uploading ? 'Subiendo...' : 'Subir Imagen'}
-          </Button>
-        </Label>
+        <Button 
+          type="button" 
+          variant="outline" 
+          disabled={uploading}
+          onClick={handleButtonClick}
+          className="cursor-pointer"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          {uploading ? 'Subiendo...' : 'Subir Imagen'}
+        </Button>
       </div>
     </div>
   );
