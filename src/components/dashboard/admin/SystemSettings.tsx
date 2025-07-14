@@ -87,6 +87,8 @@ const SystemSettings = () => {
           setting_key: key,
           setting_value: value,
           description: description || null
+        }, {
+          onConflict: 'setting_key'
         });
 
       if (error) throw error;
