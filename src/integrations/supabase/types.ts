@@ -462,7 +462,7 @@ export type Database = {
           room_number: string
           special_instructions: string | null
           status: string | null
-          Telefono: string | null
+          telefono: string | null
           total: number
           updated_at: string
         }
@@ -476,7 +476,7 @@ export type Database = {
           room_number: string
           special_instructions?: string | null
           status?: string | null
-          Telefono?: string | null
+          telefono?: string | null
           total?: number
           updated_at?: string
         }
@@ -490,7 +490,7 @@ export type Database = {
           room_number?: string
           special_instructions?: string | null
           status?: string | null
-          Telefono?: string | null
+          telefono?: string | null
           total?: number
           updated_at?: string
         }
@@ -995,6 +995,10 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      is_current_user_super_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       is_feature_enabled: {
         Args: { feature_name: string }
