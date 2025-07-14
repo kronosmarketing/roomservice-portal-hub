@@ -7,6 +7,7 @@ import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { LogOut, Mic } from "lucide-react";
 import DashboardContent from "@/components/dashboard/DashboardContent";
+import SuperAdminDashboard from "@/components/dashboard/SuperAdminDashboard";
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -148,7 +149,12 @@ const Dashboard = () => {
       </header>
 
       {/* Contenido del dashboard */}
-      <DashboardContent user={dashboardUser} />
+          {/* Check if user is super admin */}
+          {dashboardUser.userRole === 'super_admin' ? (
+            <SuperAdminDashboard />
+          ) : (
+            <DashboardContent user={dashboardUser} />
+          )}
     </div>
   );
 };

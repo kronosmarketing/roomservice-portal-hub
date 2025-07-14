@@ -136,6 +136,41 @@ export type Database = {
         }
         Relationships: []
       }
+      hotel_permissions: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          feature_name: string
+          hotel_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          feature_name: string
+          hotel_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          feature_name?: string
+          hotel_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotel_permissions_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotel_user_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotel_user_settings: {
         Row: {
           agent_name: string | null
@@ -427,6 +462,7 @@ export type Database = {
           room_number: string
           special_instructions: string | null
           status: string | null
+          Telefono: string | null
           total: number
           updated_at: string
         }
@@ -440,6 +476,7 @@ export type Database = {
           room_number: string
           special_instructions?: string | null
           status?: string | null
+          Telefono?: string | null
           total?: number
           updated_at?: string
         }
@@ -453,6 +490,7 @@ export type Database = {
           room_number?: string
           special_instructions?: string | null
           status?: string | null
+          Telefono?: string | null
           total?: number
           updated_at?: string
         }
@@ -778,6 +816,33 @@ export type Database = {
           },
         ]
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       orders_with_items: {
@@ -866,6 +931,20 @@ export type Database = {
         Args: { password: string }
         Returns: string
       }
+      get_all_hotels: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          hotel_name: string
+          agent_name: string
+          email: string
+          phone_roomservice: string
+          is_active: boolean
+          user_role: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       get_current_user_email: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -873,6 +952,13 @@ export type Database = {
       get_current_user_hotel_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      get_hotel_permissions: {
+        Args: { target_hotel_id: string }
+        Returns: {
+          feature_name: string
+          enabled: boolean
+        }[]
       }
       get_user_hotel_id: {
         Args: Record<PropertyKey, never>
@@ -909,6 +995,10 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      is_feature_enabled: {
+        Args: { feature_name: string }
+        Returns: boolean
       }
       is_hotel_manager: {
         Args: Record<PropertyKey, never>
