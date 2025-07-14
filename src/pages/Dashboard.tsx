@@ -31,20 +31,22 @@ const Dashboard = () => {
       setUser(user);
       
       try {
-        // Buscar perfil del usuario - RLS se encarga del filtrado automáticamente
+        console.log("Fetching user profile for:", user.email);
+        
+        // Buscar perfil del usuario usando email match para evitar problemas de RLS
         const { data: profile, error } = await supabase
           .from('hotel_user_settings')
           .select('*')
+          .eq('email', user.email)
           .single();
         
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error("Error fetching profile:", error);
           
-          // Si no existe el perfil, las políticas RLS lo crearán automáticamente
-          if (error.code === 'PGRST116' || error.message?.includes('No rows found')) {
-            console.log("Profile will be created automatically by RLS policies");
+          // Si no existe el perfil, crear uno nuevo
+          if (error.code === 'PGRST116') {
+            console.log("No profile found, creating one...");
             
-            // Intentar crear el perfil manualmente si es necesario
             const newProfileData = {
               email: user.email,
               hotel_name: 'Mi Hotel',
@@ -68,7 +70,7 @@ const Dashboard = () => {
             }
           }
         } else if (profile) {
-          console.log("Profile found:", profile);
+          console.log("Profile found:", profile.email, "with role:", profile.user_role);
           setUserProfile(profile);
         }
       } catch (error) {
